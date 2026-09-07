@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import styles from "./dashboard.module.css";
 
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
@@ -83,7 +83,7 @@ export default function DashboardPage() {
   const money = (value?: number) => value == null ? "—" : `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
   return <div className={styles.wrapper}>
     <div className={styles.disclaimerBanner}>Insights only · Prices may be delayed · This tool never recommends buying or selling.</div>
-    <header className={styles.header}><div><div className={styles.eyebrow}>PORTFOLIO INTELLIGENCE</div><h1 className={styles.title}>Understand what you own.</h1><p className={styles.subtitle}>Add your holdings, then choose Analyze for a grounded view of performance and recent sentiment.</p></div><button className="btn btnDanger" onClick={() => signOut({ callbackUrl: "/" })}>Sign out</button></header>
+    <header className={styles.header}><div><div className={styles.eyebrow}>PORTFOLIO INTELLIGENCE</div><h1 className={styles.title}>Understand what you own.</h1><p className={styles.subtitle}>Add your holdings, then choose Analyze for a grounded view of performance and recent sentiment.</p></div></header>
     <section className={styles.panel}><div className={styles.sectionIntro}><div><h2 className={styles.panelTitle}>Build your portfolio</h2><p className={styles.helper}>Only symbol, average price, and quantity are used.</p></div></div>
       <form className={styles.quickAddForm} onSubmit={addManual}><input className={styles.symbolInput} placeholder="Symbol (e.g. INFY)" value={symbol} onChange={(e) => setSymbol(e.target.value)} required /><input className={styles.numberInput} type="number" min="0" step="any" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /><input className={styles.numberInput} type="number" min="0" step="any" placeholder="Avg price ₹" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} required /><button className="btn" disabled={busy === "adding"}>{busy === "adding" ? "Adding…" : "Add holding"}</button></form>
       <div className={styles.importRow}><label className={styles.fileLabel}>Import .xlsx<input type="file" accept=".xlsx" onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)} /></label><span className={styles.fileName}>{file?.name || "Combined sheet data will be read automatically"}</span><button className="btn btnOutline" onClick={importFile} disabled={!file || busy === "importing"}>{busy === "importing" ? "Importing…" : "Import spreadsheet"}</button></div>

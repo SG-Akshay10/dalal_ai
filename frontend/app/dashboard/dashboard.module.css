@@ -633,14 +633,23 @@
 
 /* Calm editorial theme */
 .wrapper { max-width: 1180px; padding-top: 2.5rem; }
+.header { padding: .5rem 0 1.25rem; }
+.header > div { max-width: 720px; }
 .eyebrow { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .13em; }
 .sectionIntro, .sectionHeading, .stockTop { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
 .sectionIntro { margin-bottom:1rem; }
 .helper, .fileName { color:var(--text-secondary); font-size:.82rem; }
-.numberInput { width:150px; padding:.72rem .85rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-soft); color:var(--text-primary); font:inherit; }
+.numberInput { width:150px; padding:.72rem .85rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-surface); color:var(--text-primary); font:inherit; outline:none; transition:border-color .2s, box-shadow .2s; }
+.numberInput:focus { border-color:var(--border-focus); box-shadow:0 0 0 3px rgba(36,91,66,.12); }
+.numberInput::-webkit-inner-spin-button,
+.numberInput::-webkit-outer-spin-button { margin:0; -webkit-appearance:none; }
+.numberInput { -moz-appearance:textfield; }
 .quickAddForm .btn { width:auto; margin:0; }
 .importRow { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:1rem; }
-.fileLabel { color:var(--text-primary); font-weight:700; font-size:.85rem; cursor:pointer; }.fileLabel input { display:block; margin-top:.35rem; font-size:.75rem; }
+.fileLabel { color:var(--text-primary); font-weight:700; font-size:.85rem; cursor:pointer; }
+.fileLabel input { display:block; width:100%; max-width:260px; margin-top:.35rem; color:var(--text-secondary); font:inherit; font-size:.75rem; }
+.fileLabel input::file-selector-button { margin-right:.65rem; padding:.48rem .8rem; border:1px solid var(--border); border-radius:999px; background:var(--bg-soft); color:var(--text-primary); font:inherit; font-size:.75rem; font-weight:700; cursor:pointer; transition:background-color .2s, border-color .2s, color .2s; }
+.fileLabel input::file-selector-button:hover { border-color:var(--accent-primary); background:var(--accent-primary); color:#fff; }
 .message { margin-top:1rem; color:var(--accent-primary); font-size:.86rem; }
 .sectionHeading { margin:2rem 0 1rem; }.sectionHeading h2 { font-family:"DM Serif Display", Georgia, serif; font-size:1.6rem; font-weight:400; }.count { font:600 .8rem "DM Sans"; color:var(--text-secondary); background:var(--bg-soft); padding:.2rem .55rem; border-radius:999px; }
 .empty { border:1px dashed var(--border); border-radius:var(--radius-md); padding:3rem; text-align:center; color:var(--text-secondary); }
