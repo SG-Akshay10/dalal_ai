@@ -1,4 +1,4 @@
-# Full-Stack Starter
+# dalal.ai
 
 > **Next.js 16 · NextAuth v5 · FastAPI · Supabase Postgres**
 
@@ -48,7 +48,7 @@ A minimal but complete full-stack demo app demonstrating how to wire together a 
 ## Folder Structure
 
 ```
-stock-portfolio-management/
+dalal.ai/
 ├── frontend/                   # Next.js 14 App Router
 │   ├── app/
 │   │   ├── api/auth/

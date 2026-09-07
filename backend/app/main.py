@@ -7,7 +7,7 @@ from app.routers import items, holdings, feed, alerts, analysis
 load_dotenv()
 
 app = FastAPI(
-    title="Portfolio News Intelligence API",
+    title="dalal.ai API",
     description="FastAPI backend for tracking price-material stock news and Sarvam AI summaries.",
     version="1.0.0",
 )
@@ -38,4 +38,4 @@ app.include_router(analysis.router)
 @app.get("/health", tags=["health"])
 def health_check():
     """Public health-check endpoint."""
-    return {"status": "ok", "service": "Portfolio Intelligence API"}
+    return {"status": "ok", "service": "dalal.ai API"}

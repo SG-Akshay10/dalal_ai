@@ -6,7 +6,7 @@ export default function Home() {
     <div className={styles.hero}>
       <div className={styles.content}>
         <div className={styles.eyebrow}>
-          <span>Portfolio intelligence, made considered</span>
+          <span>dalal.ai intelligence, made considered</span>
         </div>
         <h1 className={styles.title}>
           Keep a closer eye on what you own.

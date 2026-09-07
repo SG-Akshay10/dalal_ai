@@ -16,7 +16,7 @@ def fetch_live_price(symbol: str, exchange: str = "NSE") -> Dict[str, Any]:
         response = httpx.get(
             "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker,
             params={"range": "1d", "interval": "1m"},
-            headers={"User-Agent": "portfolio-intelligence/1.0"},
+            headers={"User-Agent": "dalal.ai/1.0"},
             timeout=10.0,
         )
         response.raise_for_status()
