@@ -1,4 +1,6 @@
 from io import BytesIO
+import csv
+import io
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
@@ -8,8 +10,7 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.database import DatabaseManager
-from app.services.analysis import build_analysis
-from app.services.ingestion import ingest_for_symbols
+from app.services.market_data import market_snapshot
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
@@ -54,6 +55,25 @@ def parse_xlsx(raw: bytes) -> List[Dict[str, Any]]:
         return [{"symbol": row.get("B", "").strip(), "quantity": float(row.get("F", 0) or 0), "buy_price": float(row.get("K", 0) or 0)} for row in rows[rows.index(header) + 1:] if row.get("B", "").strip() and row.get("F") and row.get("K")]
 
 
+def parse_csv(raw: bytes) -> List[Dict[str, Any]]:
+    text = raw.decode("utf-8-sig")
+    rows = list(csv.DictReader(io.StringIO(text)))
+    if not rows or not rows[0]:
+        raise ValueError("CSV must include a header row")
+    headers = {key.strip().lower(): key for key in rows[0] if key}
+    symbol_key = next((headers[key] for key in ("symbol", "ticker", "stock") if key in headers), None)
+    quantity_key = next((headers[key] for key in ("quantity", "qty", "shares") if key in headers), None)
+    price_key = next((headers[key] for key in ("buy_price", "average price", "avg price", "average_price", "cost") if key in headers), None)
+    if not symbol_key or not quantity_key or not price_key:
+        raise ValueError("CSV must include Symbol, Quantity, and Buy Price columns")
+    result = []
+    for row in rows:
+        symbol = (row.get(symbol_key) or "").strip()
+        if symbol:
+            result.append({"symbol": symbol, "quantity": float(row[quantity_key]), "buy_price": float(row[price_key])})
+    return result
+
+
 @router.post("/holdings/manual")
 def add_manual(payload: ManualHolding, user: dict = Depends(get_current_user)):
     data = payload.model_dump()
@@ -64,25 +84,38 @@ def add_manual(payload: ManualHolding, user: dict = Depends(get_current_user)):
 
 @router.post("/holdings/import")
 async def import_holdings(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Upload an .xlsx holdings file.")
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".csv")):
+        raise HTTPException(status_code=400, detail="Upload a .csv or .xlsx holdings file.")
     try:
-        rows = parse_xlsx(await file.read())
+        raw = await file.read()
+        rows = parse_csv(raw) if file.filename.lower().endswith(".csv") else parse_xlsx(raw)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not read spreadsheet: {exc}")
     imported = [DatabaseManager.add_holding(user_id(user), {**row, "company_name": f"{row['symbol']} Holdings", "exchange": "NSE"}) for row in rows]
     return {"count": len(imported), "holdings": imported}
 
 
-@router.get("/analysis/{holding_id}")
-def analyze(holding_id: str, user: dict = Depends(get_current_user)):
+@router.get("/analysis/portfolio")
+def analyze_portfolio(user: dict = Depends(get_current_user)):
     holdings = DatabaseManager.get_holdings(user_id(user))
-    holding = next((item for item in holdings if item["id"] == holding_id), None)
-    if not holding:
-        raise HTTPException(status_code=404, detail="Holding not found")
-    try:
-        ingest_for_symbols([holding["symbol"]])
-    except Exception:
-        pass
-    news = DatabaseManager.get_news_by_symbol(holding["symbol"], max_days=30)
-    return build_analysis(holding, news)
+    positions = []
+    total_invested = 0.0
+    total_current = 0.0
+    for holding in holdings:
+        quantity = float(holding.get("quantity") or 0)
+        buy_price = float(holding.get("buy_price") or 0)
+        invested = quantity * buy_price
+        position = {"holding": holding, "invested_amount": invested, "current_amount": None, "quote": None, "error": None}
+        total_invested += invested
+        try:
+            quote = market_snapshot(holding["symbol"], holding.get("exchange", "NSE"))
+            position["quote"] = {key: quote.get(key) for key in ("price", "previous_close", "day_change_pct", "source", "as_of", "currency")}
+            if quote.get("price") is not None:
+                position["current_amount"] = quantity * float(quote["price"])
+                total_current += position["current_amount"]
+        except Exception as exc:
+            position["error"] = str(exc)
+        positions.append(position)
+    return {"positions": positions, "total_invested": total_invested, "total_current": total_current,
+            "price_coverage": sum(1 for item in positions if item["current_amount"] is not None)}
+

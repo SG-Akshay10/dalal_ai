@@ -23,7 +23,7 @@ export default function Navbar() {
   return (
     <nav className={styles.nav}>
       <Link href="/" className={styles.brand}>
-        Portfolio Intelligence
+        dalal.ai
       </Link>
       <div className={styles.links}>
         <button

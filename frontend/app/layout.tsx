@@ -4,7 +4,7 @@ import SessionProvider from "@/components/SessionProvider";
 import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Portfolio Intelligence | Your market brief",
+  title: "dalal.ai | Your market brief",
   description:
     "A calm, focused place to follow the news that matters to your holdings.",
 };
