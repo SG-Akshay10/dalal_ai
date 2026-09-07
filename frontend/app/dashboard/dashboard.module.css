@@ -699,6 +699,15 @@
 .stockCard:hover { transform:translateY(-2px); border-color:var(--accent-secondary); box-shadow:0 8px 24px rgba(0,0,0,.06); }
 .holdingMeta { align-items:center; line-height:1.5; }
 .holdingMeta span { white-space:nowrap; }
+.bentoGrid { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:.65rem; margin-top:1.15rem; }
+.bentoGrid > div { min-height:82px; display:flex; flex-direction:column; justify-content:space-between; gap:.2rem; padding:.8rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-soft); }
+.bentoGrid small, .bentoGrid em { color:var(--text-secondary); font-size:.7rem; font-style:normal; }
+.bentoGrid strong { font-size:1.05rem; letter-spacing:-.02em; }
+.valueTile { background:rgba(39,114,75,.09)!important; border-color:rgba(39,114,75,.22)!important; }
+.profitTile { background:rgba(39,114,75,.14)!important; border-color:rgba(39,114,75,.28)!important; color:var(--accent-success); }
+.lossTile { background:rgba(180,74,64,.11)!important; border-color:rgba(180,74,64,.25)!important; color:var(--accent-danger); }
+.profitTile small, .profitTile em, .lossTile small, .lossTile em { color:inherit; opacity:.78; }
+.quoteError { margin-top:.8rem; color:var(--accent-danger); font-size:.78rem; }
 .removeButton { padding:.35rem .5rem; border-radius:999px; }
 .removeButton:hover { background:var(--bg-soft); }
 
@@ -710,6 +719,7 @@
   .sectionHeading > div:last-child .btn { width:100%; order:2; }
   .holdingList > .metrics { padding:0; border:0; background:transparent; }
   .metrics div { min-height:0; }
+  .bentoGrid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
 }
 
 :global(:root[data-theme="dark"]) .symbolInput,
