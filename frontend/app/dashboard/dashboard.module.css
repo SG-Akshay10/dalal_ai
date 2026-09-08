@@ -727,3 +727,71 @@
 :global(:root[data-theme="dark"]) .selectInput,
 :global(:root[data-theme="dark"]) .searchInput,
 :global(:root[data-theme="dark"]) .holdingCard { background: var(--bg-soft); color: var(--text-primary); border-color: var(--border); }
+
+/* Compact add controls and portfolio summary */
+.panelCollapsed { padding-top: .55rem; padding-bottom: .55rem; margin-bottom: .9rem; }
+.panelToggle { display:inline-flex; align-items:center; gap:.45rem; min-height:38px; padding:.55rem .8rem; border:1px solid var(--border); border-radius:9px; background:var(--bg-soft); color:var(--text-primary); cursor:pointer; font:inherit; font-size:.82rem; font-weight:700; transition:background-color .18s ease, border-color .18s ease, color .18s ease; }
+.panelToggle:hover { border-color:var(--accent-primary); color:var(--accent-primary); }
+.clearButton { background:var(--accent-danger)!important; border:1px solid var(--accent-danger)!important; color:#fff!important; }
+.clearButton { min-height:40px; border-radius:9px!important; box-shadow:none!important; }
+.clearButton:hover:not(:disabled) { background:#963d35!important; border-color:#963d35!important; color:#fff!important; box-shadow:0 4px 10px rgba(180,74,64,.2)!important; transform:translateY(-1px)!important; }
+.importRow { align-items:flex-end; }
+.fileLabel { display:flex; flex-direction:column; justify-content:flex-end; }
+.fileLabel input { height:40px; margin-top:.35rem; padding:0; }
+.importRow .btn { align-self:flex-end; height:40px; }
+:global(.btn.clearButton), :global(.btn.clearButton:hover:not(:disabled)) { background:var(--accent-danger)!important; border-color:var(--accent-danger)!important; color:#fff!important; }
+:global(.btn.clearButton:hover:not(:disabled)) { background:#963d35!important; border-color:#963d35!important; }
+:global(.btn) { width:auto; margin:0; min-height:40px; padding:.62rem 1rem; border:1px solid var(--accent-primary); border-radius:9px; background:var(--accent-primary); box-shadow:0 2px 5px rgba(36,91,66,.14); font-size:.84rem; line-height:1; transition:background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+:global(.btn:hover:not(:disabled)) { background:var(--accent-primary-hover); border-color:var(--accent-primary-hover); box-shadow:0 4px 10px rgba(36,91,66,.18); transform:translateY(-1px); }
+:global(.btn:focus-visible), .panelToggle:focus-visible { outline:3px solid rgba(36,91,66,.22); outline-offset:2px; }
+:global(.btn.btnOutline) { border-color:var(--border); background:var(--bg-surface); box-shadow:none; color:var(--text-primary); }
+:global(.btn.btnOutline:hover:not(:disabled)) { border-color:var(--accent-primary); background:var(--bg-soft); color:var(--accent-primary); box-shadow:none; }
+.sectionHeading { align-items:flex-end; }
+.sectionHeading h2 { letter-spacing:-.02em; }
+.stockActions { flex-wrap:wrap; justify-content:flex-end; }
+.stockActions .helper { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stockActions .btn { padding:.62rem .9rem; font-size:.84rem; }
+.metrics { padding:.35rem; border:1px solid var(--border); border-radius:var(--radius-md); background:linear-gradient(135deg, var(--bg-surface), var(--bg-soft)); box-shadow:0 4px 16px rgba(0,0,0,.035); }
+.metrics div { display:flex; flex-direction:column; justify-content:center; }
+.metrics small { letter-spacing:.02em; }
+.metrics { grid-template-columns:repeat(5, minmax(0, 1fr)); gap:.65rem; }
+.metrics div { min-height:76px; padding:.7rem; }
+.metricDetail { font-size:.82rem!important; line-height:1.25; }
+.metricCaption { display:block; margin-top:.15rem; color:var(--text-muted); font-size:.68rem; line-height:1.25; }
+.returnPositive { background:rgba(39,114,75,.12)!important; border-color:rgba(39,114,75,.28)!important; }
+.returnNegative { background:rgba(180,74,64,.12)!important; border-color:rgba(180,74,64,.28)!important; }
+.stockCard { padding:1rem; box-shadow:0 4px 14px rgba(0,0,0,.025); }
+.stockTop { padding-bottom:.15rem; }
+.stockName { display:inline-block; max-width:50%; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom; white-space:nowrap; }
+.bentoGrid { gap:.5rem; margin-top:.9rem; }
+.bentoGrid > div { min-height:70px; padding:.65rem; }
+@media (max-width:900px) { .metrics { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+@media (max-width:700px) { .sectionHeading { align-items:flex-start; } .stockActions { justify-content:space-between; } .stockActions .helper { max-width:150px; } .metrics { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.5rem; } .metrics div:last-child { grid-column:span 2; } .panelCollapsed { padding:.7rem 1rem; } .stockName { max-width:42%; } }
+
+/* Final compact add-panel layout */
+.panel { padding:1.15rem 1.25rem; }
+.panel .sectionIntro { margin-bottom:.85rem; }
+.panel .panelTitle { font-size:1rem; }
+.quickAddForm { display:grid; grid-template-columns:minmax(0, 1fr) 150px 150px auto; align-items:center; gap:.55rem; margin:0; padding:0; border:0; background:transparent; }
+.quickAddForm input { width:100%; min-width:0; height:42px; min-height:42px; padding:.65rem .8rem; }
+.quickAddForm .btn { height:42px; min-height:42px; white-space:nowrap; }
+.importRow { display:flex; align-items:center; gap:.65rem; margin-top:.9rem; padding-top:.85rem; border-top:1px solid var(--border); }
+.fileLabel { flex:0 0 auto; display:flex; flex-direction:row; align-items:center; gap:.65rem; color:var(--text-secondary); font-size:.78rem; font-weight:600; }
+.fileLabel input { width:230px; height:38px; margin:0; padding:0; font-size:.74rem; }
+.fileLabel input::file-selector-button { height:38px; margin-right:.55rem; padding:.4rem .75rem; border-radius:8px; }
+.fileName { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.importRow .btn { height:38px; min-height:38px; }
+.panelCollapsed { padding-top:.55rem; padding-bottom:.55rem; }
+.panelCollapsed .sectionIntro { margin-bottom:0; }
+
+@media (max-width:700px) {
+  .panel { padding:1rem; }
+  .quickAddForm { grid-template-columns:1fr 1fr; }
+  .quickAddForm .symbolInput { grid-column:span 2; }
+  .quickAddForm .btn { grid-column:span 2; }
+  .importRow { align-items:stretch; flex-direction:column; }
+  .fileLabel { align-items:flex-start; flex-direction:column; gap:.35rem; }
+  .fileLabel input { width:100%; }
+  .fileName { width:100%; }
+  .importRow .btn { width:100%; }
+}

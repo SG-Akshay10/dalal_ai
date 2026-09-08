@@ -42,7 +42,7 @@ export default function Navbar() {
             </Link>
             <button
               className={styles.logoutBtn}
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={() => { window.dispatchEvent(new Event("portfolio-signout")); signOut({ callbackUrl: "/" }); }}
             >
               Logout
             </button>
