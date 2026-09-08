@@ -708,6 +708,13 @@
 .lossTile { background:rgba(180,74,64,.11)!important; border-color:rgba(180,74,64,.25)!important; color:var(--accent-danger); }
 .profitTile small, .profitTile em, .lossTile small, .lossTile em { color:inherit; opacity:.78; }
 .quoteError { margin-top:.8rem; color:var(--accent-danger); font-size:.78rem; }
+.chartWrap { margin-top:1rem; padding:.85rem .85rem .7rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-soft); overflow:hidden; }
+.chart { width:100%; min-height:360px; }
+.legend { display:flex; flex-wrap:wrap; gap:.55rem 1rem; padding:.55rem .2rem 0; color:var(--text-secondary); font-size:.72rem; font-weight:700; }
+.legendPrice { color:#34d399; }.legendSma50 { color:#d99b14; }.legendSma200 { color:#8b5cf6; }.legendBand { color:#0284c7; }.legendVolume { color:#64748b; }
+.chartStatus, .chartError { margin-top:1rem; padding:.85rem; border-radius:var(--radius-sm); font-size:.82rem; }
+.chartStatus { color:var(--text-secondary); background:var(--bg-soft); }.chartError { color:var(--accent-danger); background:rgba(180,74,64,.08); }
+.chartSource { margin:.45rem .1rem 0; color:var(--text-muted); font-size:.7rem; }
 .removeButton { padding:.35rem .5rem; border-radius:999px; }
 .removeButton:hover { background:var(--bg-soft); }
 
@@ -794,4 +801,6 @@
   .fileLabel input { width:100%; }
   .fileName { width:100%; }
   .importRow .btn { width:100%; }
+  .chartWrap { margin-left:-.1rem; margin-right:-.1rem; padding:.6rem; }
+  .chart { min-height:300px; }
 }

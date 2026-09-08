@@ -2,11 +2,14 @@
 
 import { ChangeEvent, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import PriceChart from "./PriceChart";
 import styles from "./dashboard.module.css";
 
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
 type Position = { holding: Holding; invested_amount: number; current_amount?: number | null; quote?: { price?: number; source?: string; as_of?: string; previous_close?: number; day_change_pct?: number; currency?: string }; error?: string | null };
 type PortfolioAnalysis = { positions: Position[]; total_invested: number; total_current: number; price_coverage: number };
+type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null };
+type HistoryState = { data?: Candle[]; source?: string; error?: string; loading: boolean };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function DashboardPage() {
@@ -15,6 +18,7 @@ export default function DashboardPage() {
   const [symbol, setSymbol] = useState(""); const [quantity, setQuantity] = useState(""); const [buyPrice, setBuyPrice] = useState(""); const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null); const [busy, setBusy] = useState(""); const [message, setMessage] = useState("");
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(true);
+  const [histories, setHistories] = useState<Record<string, HistoryState>>({});
   async function token() { const response = await fetch("/api/auth/token"); return response.ok ? (await response.json()).token : null; }
   async function load() { const auth = await token(); if (!auth) return; const response = await fetch(`${API_URL}/api/holdings`, { headers: { Authorization: `Bearer ${auth}` } }); if (response.ok) { const items = await response.json(); setHoldings(items); setIsAddPanelOpen(items.length === 0); } }
   // Initial portfolio hydration is an intentional external-data sync.
@@ -30,6 +34,27 @@ export default function DashboardPage() {
     return () => window.removeEventListener("portfolio-signout", clearAnalysis);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    if (!holdings.length) return;
+    let cancelled = false;
+    const loadHistories = async () => {
+      const auth = await token();
+      if (!auth || cancelled) return;
+      await Promise.all(holdings.map(async (holding) => {
+        setHistories((current) => ({ ...current, [holding.id]: { ...current[holding.id], loading: true } }));
+        try {
+          const response = await fetch(`${API_URL}/api/analysis/history/${encodeURIComponent(holding.symbol)}?exchange=${encodeURIComponent(holding.exchange || "NSE")}`, { headers: { Authorization: `Bearer ${auth}` } });
+          const result = await response.json();
+          if (cancelled) return;
+          setHistories((current) => ({ ...current, [holding.id]: response.ok ? { data: result.history, source: result.source, loading: false } : { error: result.detail || "Price history is unavailable.", loading: false } }));
+        } catch {
+          if (!cancelled) setHistories((current) => ({ ...current, [holding.id]: { error: "Price history is unavailable.", loading: false } }));
+        }
+      }));
+    };
+    loadHistories();
+    return () => { cancelled = true; };
+  }, [holdings]);
   async function addManual(event: React.FormEvent) {
     event.preventDefault();
     setBusy("adding");
@@ -86,6 +111,7 @@ export default function DashboardPage() {
     }
 
     setHoldings((items) => items.filter((item) => item.id !== id));
+    setHistories((current) => { const next = { ...current }; delete next[id]; return next; });
     setAnalysis(null);
     window.sessionStorage.removeItem("portfolio-analysis");
   }
@@ -95,7 +121,7 @@ export default function DashboardPage() {
     const auth = await token();
     if (!auth) { setMessage("Your session has expired. Please sign in again."); setBusy(""); return; }
     const responses = await Promise.all(holdings.map((holding) => fetch(`${API_URL}/api/holdings/${holding.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${auth}` } })));
-    if (responses.every((response) => response.ok)) { setHoldings([]); setAnalysis(null); setIsAddPanelOpen(true); window.sessionStorage.removeItem("portfolio-analysis"); setMessage("All holdings cleared."); }
+    if (responses.every((response) => response.ok)) { setHoldings([]); setHistories({}); setAnalysis(null); setIsAddPanelOpen(true); window.sessionStorage.removeItem("portfolio-analysis"); setMessage("All holdings cleared."); }
     else setMessage("Some holdings could not be cleared. Please try again.");
     setBusy("");
   }
@@ -116,6 +142,6 @@ export default function DashboardPage() {
       </div>}{message && <p className={styles.message} role="status">{message}</p>}
     </section>
     <div className={styles.sectionHeading}><div><div className={styles.eyebrow}>YOUR HOLDINGS</div><h2>Portfolio positions <span className={styles.count}>{holdings.length}</span></h2></div><div className={styles.stockActions}><span className={styles.helper}>{session?.user?.email}</span>{holdings.length > 0 && <><button className="btn" onClick={analyzePortfolio} disabled={busy === "analyzing"}>{busy === "analyzing" ? "Analyzing portfolio…" : analysis ? "Refresh portfolio analysis" : "Analyze portfolio"}</button><button className="btn btnDanger clearButton" onClick={clearPortfolio} disabled={busy === "clearing"}>{busy === "clearing" ? "Clearing…" : "Clear portfolio"}</button></>}</div></div>
-    {holdings.length === 0 ? <div className={styles.empty}>Add a holding manually or import the spreadsheet to begin.</div> : <div className={styles.holdingList}>{analysis && <div className={styles.metrics}><div><small>Total invested</small><strong>{money(analysis.total_invested)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Current value</small><strong>{money(analysis.total_current)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Total return</small><strong className={analysis.total_current >= analysis.total_invested ? styles.goodText : styles.badText}>{percent(returnPercent(analysis.total_current, analysis.total_invested))}</strong></div><div><small>Price coverage</small><strong>{pricedCount} of {holdings.length}</strong></div><div><small>Latest snapshot</small><strong className={styles.metricDetail}>{snapshotLabel || "Not available"}</strong><span className={styles.metricCaption}>{quoteSources.join(", ") || "No quote source"}</span></div></div>}{holdings.map((holding) => { const item = analysis?.positions.find((position) => position.holding.id === holding.id); const change = returnPercent(item?.current_amount, item?.invested_amount); const positive = change != null && change >= 0; const performanceClass = change == null ? styles.valueTile : positive ? styles.profitTile : styles.lossTile; const valueClass = `${styles.valueTile} ${performanceClass}`; return <article className={styles.stockCard} key={holding.id}><div className={styles.stockTop}><div><span className={styles.stockSymbol}>{holding.symbol}</span><span className={styles.stockName}>{holding.company_name}</span></div><button className={styles.removeButton} onClick={() => remove(holding.id)}>Remove</button></div><div className={styles.bentoGrid}><div><small>Quantity</small><strong>{holding.quantity ?? "—"}</strong></div><div><small>Average price</small><strong>{money(holding.buy_price)}</strong></div>{item && <><div><small>Market price</small><strong>{money(item.quote?.price)}</strong></div><div><small>Invested</small><strong>{money(item.invested_amount)}</strong></div><div className={valueClass}><small>Current value</small><strong>{money(item.current_amount)}</strong></div><div className={performanceClass}><small>Profit / loss</small><strong>{percent(change)}</strong></div></>}</div>{item?.error && <p className={styles.quoteError}>{item.error}</p>}</article>; })}</div>}
+    {holdings.length === 0 ? <div className={styles.empty}>Add a holding manually or import the spreadsheet to begin.</div> : <div className={styles.holdingList}>{analysis && <div className={styles.metrics}><div><small>Total invested</small><strong>{money(analysis.total_invested)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Current value</small><strong>{money(analysis.total_current)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Total return</small><strong className={analysis.total_current >= analysis.total_invested ? styles.goodText : styles.badText}>{percent(returnPercent(analysis.total_current, analysis.total_invested))}</strong></div><div><small>Price coverage</small><strong>{pricedCount} of {holdings.length}</strong></div><div><small>Latest snapshot</small><strong className={styles.metricDetail}>{snapshotLabel || "Not available"}</strong><span className={styles.metricCaption}>{quoteSources.join(", ") || "No quote source"}</span></div></div>}{holdings.map((holding) => { const item = analysis?.positions.find((position) => position.holding.id === holding.id); const history = histories[holding.id]; const change = returnPercent(item?.current_amount, item?.invested_amount); const positive = change != null && change >= 0; const performanceClass = change == null ? styles.valueTile : positive ? styles.profitTile : styles.lossTile; const valueClass = `${styles.valueTile} ${performanceClass}`; return <article className={styles.stockCard} key={holding.id}><div className={styles.stockTop}><div><span className={styles.stockSymbol}>{holding.symbol}</span><span className={styles.stockName}>{holding.company_name}</span></div><button className={styles.removeButton} onClick={() => remove(holding.id)}>Remove</button></div><div className={styles.bentoGrid}><div><small>Quantity</small><strong>{holding.quantity ?? "—"}</strong></div><div><small>Average price</small><strong>{money(holding.buy_price)}</strong></div>{item && <><div><small>Market price</small><strong>{money(item.quote?.price)}</strong></div><div><small>Invested</small><strong>{money(item.invested_amount)}</strong></div><div className={valueClass}><small>Current value</small><strong>{money(item.current_amount)}</strong></div><div className={performanceClass}><small>Profit / loss</small><strong>{percent(change)}</strong></div></>}</div>{history?.loading && <div className={styles.chartStatus}>Loading two-year price chart…</div>}{history?.error && <p className={styles.chartError}>{history.error}</p>}{history?.data && <><PriceChart data={history.data} /><p className={styles.chartSource}>2-year daily data · {history.source}</p></>}{item?.error && <p className={styles.quoteError}>{item.error}</p>}</article>; })}</div>}
   </div>;
 }

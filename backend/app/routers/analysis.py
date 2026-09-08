@@ -119,3 +119,19 @@ def analyze_portfolio(user: dict = Depends(get_current_user)):
     return {"positions": positions, "total_invested": total_invested, "total_current": total_current,
             "price_coverage": sum(1 for item in positions if item["current_amount"] is not None)}
 
+
+@router.get("/analysis/history/{symbol}")
+def stock_history(symbol: str, exchange: str = "NSE", user: dict = Depends(get_current_user)):
+    """Return the chart-ready, two-year daily price series for one holding."""
+    try:
+        snapshot = market_snapshot(symbol, exchange)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not load price history: {exc}")
+
+    return {
+        "symbol": snapshot["symbol"],
+        "exchange": snapshot["exchange"],
+        "history": snapshot["history"],
+        "source": snapshot["source"],
+        "as_of": snapshot["as_of"],
+    }

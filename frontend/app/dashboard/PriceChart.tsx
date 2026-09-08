@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CandlestickSeries, ColorType, HistogramSeries, LineSeries, createChart } from "lightweight-charts";
+import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart } from "lightweight-charts";
 import styles from "./dashboard.module.css";
 
 type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null };
@@ -11,11 +11,14 @@ export default function PriceChart({ data }: { data: Candle[] }) {
   useEffect(() => {
     if (!container.current || !data.length) return;
     const chart = createChart(container.current, {
+      width: container.current.clientWidth,
       height: 360,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#94a3b8" },
       grid: { vertLines: { color: "rgba(148,163,184,.08)" }, horzLines: { color: "rgba(148,163,184,.08)" } },
       rightPriceScale: { borderColor: "rgba(148,163,184,.18)" }, timeScale: { borderColor: "rgba(148,163,184,.18)", timeVisible: false },
-      crosshair: { mode: 0 },
+      crosshair: { mode: CrosshairMode.Normal },
+      handleScroll: true,
+      handleScale: true,
     });
     const candle = chart.addSeries(CandlestickSeries, { upColor: "#34d399", downColor: "#f87171", borderVisible: false, wickUpColor: "#34d399", wickDownColor: "#f87171" });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume", color: "rgba(96,165,250,.35)" });
@@ -33,5 +36,5 @@ export default function PriceChart({ data }: { data: Candle[] }) {
     observer.observe(container.current);
     return () => { observer.disconnect(); chart.remove(); };
   }, [data]);
-  return <div className={styles.chartWrap}><div ref={container} className={styles.chart} /><div className={styles.legend}><span className={styles.legendPrice}>● Price</span><span className={styles.legendSma50}>━ SMA 50</span><span className={styles.legendSma200}>━ SMA 200</span><span className={styles.legendBand}>━ Bollinger (20, 2)</span><span className={styles.legendVolume}>▮ Volume</span></div></div>;
+  return <section className={styles.chartWrap} aria-label="Two-year interactive price chart"><div className={styles.chart} ref={container} /><div className={styles.legend} aria-label="Chart legend"><span className={styles.legendPrice}>● Price</span><span className={styles.legendSma50}>━ SMA 50</span><span className={styles.legendSma200}>━ SMA 200</span><span className={styles.legendBand}>━ Bollinger (20, 2)</span><span className={styles.legendVolume}>▮ Volume</span></div></section>;
 }

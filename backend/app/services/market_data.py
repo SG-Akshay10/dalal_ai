@@ -186,9 +186,14 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
             close = _finite((quote.get("close") or [])[index] if index < len(quote.get("close", [])) else None)
             if close is None:
                 continue
+            # Sparse Yahoo candles occasionally omit an intraday field. Keep
+            # the daily series chart-safe rather than failing the whole chart.
+            open_price = _finite((quote.get("open") or [])[index] if index < len(quote.get("open", [])) else None) or close
+            high = _finite((quote.get("high") or [])[index] if index < len(quote.get("high", [])) else None) or max(open_price, close)
+            low = _finite((quote.get("low") or [])[index] if index < len(quote.get("low", [])) else None) or min(open_price, close)
             rows.append({"time": datetime.fromtimestamp(stamp, timezone.utc).date().isoformat(),
-                         "open": _finite((quote.get("open") or [])[index]), "high": _finite((quote.get("high") or [])[index]),
-                         "low": _finite((quote.get("low") or [])[index]), "close": close,
+                         "open": open_price, "high": max(high, open_price, close),
+                         "low": min(low, open_price, close), "close": close,
                          "volume": _finite((quote.get("volume") or [])[index]) or 0})
         closes = [row["close"] for row in rows]
         sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
