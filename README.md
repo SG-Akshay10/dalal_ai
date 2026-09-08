@@ -213,6 +213,12 @@ portfolios receive detailed sector-level analysis only. If Sarvam is unavailable
 or cannot produce a validated report, the endpoint returns HTTP 503 and the UI
 does not display a stale or partial AI report.
 
+AI reports are held in backend memory for 24 hours per user and portfolio
+composition. Dashboard refreshes reuse the cached report, while live quotes and
+charts can refresh independently. Changing holdings, quantity, buy price,
+sector, or exchange starts a new report cycle. The process-local cache resets
+when the backend restarts.
+
 To run the graph against holdings already created through the dashboard:
 
 ```bash

@@ -91,7 +91,18 @@ def synthesizer_agent(state: PortfolioState) -> dict:
     narrative = text_completion(SYNTHESIS_PROMPT, payload, max_tokens=2600)
     if _is_prompt_echo(narrative):
         narrative = _safe_executive_summary(state)
-    sector_text = state.sector_analysis.macro_commentary if state.sector_analysis else "Sector analysis was unavailable."
+    if state.sector_analysis:
+        allocation_text = "; ".join(f"{item.sector}: {item.allocation_pct:.1f}% ({item.risk_level.lower()} risk)" for item in state.sector_analysis.findings)
+        sector_text = f"{allocation_text}. {state.sector_analysis.macro_commentary}"
+    else:
+        sector_text = "Sector analysis was unavailable."
     asset_text = "\n\n".join(item.narrative for item in (state.asset_analysis.findings if detailed and state.asset_analysis else []))
-    risk_text = " ".join(item.commentary for item in (state.risk_analysis.findings if state.risk_analysis else []))
+    if state.risk_analysis:
+        high = sum(1 for item in state.risk_analysis.findings if item.severity == "High")
+        medium = sum(1 for item in state.risk_analysis.findings if item.severity == "Medium")
+        drawdowns = [item.drawdown_pct for item in state.risk_analysis.findings if item.drawdown_pct is not None]
+        drawdown_text = f" The largest observed drawdown reference is {min(drawdowns):.1f}%." if drawdowns else ""
+        risk_text = f"{high} holding(s) are flagged high severity and {medium} medium severity, with an overall portfolio risk level of {state.risk_analysis.portfolio_risk_level.lower()}.{drawdown_text} These diagnostics use observed drawdown, volatility, and support as educational risk references rather than trade instructions."
+    else:
+        risk_text = "Risk diagnostics were unavailable."
     return {"report": ExecutiveReport(headline="Portfolio executive analysis", executive_summary=narrative, sector_commentary=sector_text, asset_commentary=asset_text, risk_commentary=risk_text, recommendations=["Review concentration and position-size limits against personal goals.", "Monitor material changes in sector exposure, volatility, and drawdown."], disclaimer="Educational analysis only; not investment advice.")}

@@ -8,20 +8,20 @@
   padding: 1.5rem 1.5rem 4rem;
 }
 
-.aiPanel { margin: 1.5rem 0; padding: 1.2rem; border: 1px solid #334155; border-radius: 12px; background: linear-gradient(135deg, rgba(30,41,59,.95), rgba(15,23,42,.95)); }
+.aiPanel { display: flex; flex-direction: column; margin: 1.5rem 0; padding: 1.35rem; border: 1px solid #334155; border-radius: 12px; background: linear-gradient(135deg, rgba(30,41,59,.95), rgba(15,23,42,.95)); }
 .aiPanel h2 { margin: .25rem 0 .4rem; color: #f8fafc; font-size: 1.15rem; }
-.aiInsight { color: #cbd5e1; margin: 0 0 1rem; line-height: 1.55; white-space: pre-wrap; }
-.aiGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
+.aiInsight { order: 0; color: #dbe5f1; margin: 0; line-height: 1.7; white-space: pre-wrap; font-size: .94rem; max-width: 900px; }
+.aiGrid { order: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin-top: 1.35rem; }
 .aiGrid div { padding: .7rem; border-radius: 8px; background: rgba(148,163,184,.1); }
 .aiGrid small, .aiGrid strong { display: block; }
 .aiGrid small { color: #94a3b8; font-size: .75rem; }
 .aiGrid strong { color: #f8fafc; margin-top: .2rem; }
-.aiColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+.aiColumns { order: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
 .aiColumns h3 { margin: 0 0 .5rem; font-size: .85rem; color: #e2e8f0; }
 .aiRow { display: flex; justify-content: space-between; padding: .42rem 0; border-bottom: 1px solid rgba(148,163,184,.15); color: #cbd5e1; font-size: .82rem; }
 .aiRow small { color: #94a3b8; margin-left: .35rem; }
-.aiMissing { color: #fbbf24; font-size: .8rem; margin: 1rem 0 0; }
-.aiNarrative { margin-top: 1rem; color: #cbd5e1; line-height: 1.55; white-space: pre-wrap; }
+.aiMissing { order: 4; color: #fbbf24; font-size: .8rem; margin: 1rem 0 0; }
+.aiNarrative { order: 1; margin-top: 1.15rem; padding: 1rem 0 0; border-top: 1px solid rgba(148,163,184,.2); color: #cbd5e1; line-height: 1.65; white-space: pre-wrap; }
 .aiNarrative h3 { color: #f8fafc; font-size: .9rem; margin: 1rem 0 .25rem; }
 .aiNarrative p { white-space: pre-line; margin: 0; }
 .aiNarrative ul { margin: .3rem 0 0; padding-left: 1.25rem; }

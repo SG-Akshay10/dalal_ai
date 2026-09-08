@@ -1,5 +1,9 @@
 from io import BytesIO
 import logging
+import hashlib
+import json
+import threading
+import time
 import csv
 import io
 from zipfile import ZipFile
@@ -17,6 +21,10 @@ from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfol
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 logger = logging.getLogger(__name__)
+_RISK_REPORT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_RISK_REPORT_CACHE_LOCK = threading.Lock()
+RISK_REPORT_CACHE_TTL_SECONDS = 24 * 60 * 60
+RISK_REPORT_CACHE_VERSION = "v2"
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
@@ -56,12 +64,26 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
     invalid = [index for index, holding in enumerate(holdings) if not (holding.get("ticker") or holding.get("symbol")) or holding.get("quantity") is None]
     if invalid:
         raise HTTPException(status_code=422, detail=f"Holdings at indexes {invalid} require ticker (or symbol) and quantity.")
+    # Live prices deliberately do not participate in this key: the expensive
+    # AI report is refreshed once per day, while the normal quote endpoint can
+    # still refresh prices independently.
+    cache_input = [{key: holding.get(key) for key in ("ticker", "symbol", "quantity", "buy_price", "sector", "exchange")} for holding in holdings]
+    cache_key = f"{RISK_REPORT_CACHE_VERSION}:{user_id(user)}:{hashlib.sha256(json.dumps(cache_input, sort_keys=True, default=str).encode()).hexdigest()}"
+    now = time.time()
+    with _RISK_REPORT_CACHE_LOCK:
+        cached = _RISK_REPORT_CACHE.get(cache_key)
+        if cached and cached[0] > now:
+            cached_payload = dict(cached[1])
+            cached_payload["analysis_cached"] = True
+            cached_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached[0] - RISK_REPORT_CACHE_TTL_SECONDS))
+            cached_payload["analysis_refresh_after"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached[0]))
+            return cached_payload
     try:
         state = run_portfolio_pipeline(holdings)
         report = state.report
         sector = state.sector_analysis
         risk = state.risk_analysis
-        return {
+        response_payload = {
             **state.model_dump(mode="json"),
             # Compatibility fields let the existing dashboard progressively
             # render the richer graph output without losing its summary view.
@@ -70,6 +92,13 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
             "stock_level_risk_profiles": [{"ticker": item.ticker, "sector": next((holding.sector for holding in state.enriched_holdings if holding.ticker == item.ticker), "Unknown"), "overall_risk_rating": item.severity} for item in (risk.findings if risk else [])],
             "executive_report": report.model_dump(mode="json") if report else None,
         }
+        with _RISK_REPORT_CACHE_LOCK:
+            expires_at = time.time() + RISK_REPORT_CACHE_TTL_SECONDS
+            response_payload["analysis_cached"] = False
+            response_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at - RISK_REPORT_CACHE_TTL_SECONDS))
+            response_payload["analysis_refresh_after"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at))
+            _RISK_REPORT_CACHE[cache_key] = (expires_at, response_payload)
+        return response_payload
     except PortfolioAnalysisUnavailable as exc:
         logger.warning("Portfolio AI analysis unavailable: %s", exc)
         raise HTTPException(status_code=503, detail="AI analysis is temporarily unavailable. Please retry.") from exc
