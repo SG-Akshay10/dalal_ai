@@ -166,8 +166,59 @@ uvicorn app.main:app --reload    # Runs on http://localhost:8000
 | `GET` | `/api/items/` | 🔒 JWT | List items for logged-in user |
 | `POST` | `/api/items/` | 🔒 JWT | Create new item |
 | `DELETE` | `/api/items/{id}` | 🔒 JWT | Delete item (owner only) |
+| `POST` | `/api/analysis/risk-profile` | 🔒 JWT | Structured stock, sector, and diversification risk analysis |
 
 Interactive docs: **http://localhost:8000/docs**
+
+### Portfolio risk-analysis input
+
+`POST /api/analysis/risk-profile` accepts raw holdings as JSON. Each item needs
+`ticker` (or `symbol`) and `quantity`; provide `sector` and `current_price` (or
+`buy_price`) for allocation analysis. The optional fields
+`annualized_volatility_pct` (or `historical_prices`), `beta`, `market_cap`,
+`analyst_target_price`, `recent_momentum_pct`, and `growth_outlook` enrich risk
+and return-potential profiles. Missing market/sector fields are returned in the
+per-stock and portfolio `data_quality.errors` fields rather than failing the
+whole report.
+
+```json
+{
+  "holdings": [
+    {
+      "ticker": "INFY",
+      "quantity": 20,
+      "sector": "Information Technology",
+      "current_price": 1500,
+      "annualized_volatility_pct": 28.4,
+      "market_cap": 650000000000,
+      "beta": 1.1,
+      "analyst_target_price": 1650,
+      "recent_momentum_pct": 8.5,
+      "growth_outlook": "positive"
+    }
+  ],
+  "include_llm_insight": true,
+  "concentration_threshold_pct": 35,
+  "minimum_allocation_pct": 5
+}
+```
+
+The endpoint now runs a LangGraph multi-agent analysis: ingestion feeds sector,
+asset-technical, and risk agents in parallel; a critic validates their
+structured outputs before Sarvam synthesizes the executive report. Responses
+include the full `executive_report`, enriched holdings, sector and risk outputs,
+and compatibility summary fields for the dashboard. A portfolio of ten or fewer
+holdings receives an asset narrative of at least 100 words per holding; larger
+portfolios receive detailed sector-level analysis only. If Sarvam is unavailable
+or cannot produce a validated report, the endpoint returns HTTP 503 and the UI
+does not display a stale or partial AI report.
+
+To run the graph against holdings already created through the dashboard:
+
+```bash
+cd backend
+python test_pipeline.py --user-id <user-id>
+```
 
 ---
 

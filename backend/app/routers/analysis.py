@@ -1,4 +1,5 @@
 from io import BytesIO
+import logging
 import csv
 import io
 from zipfile import ZipFile
@@ -7,13 +8,15 @@ from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
 from app.database import DatabaseManager
 from app.services.market_data import market_quote, market_snapshot
+from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
 
 router = APIRouter(prefix="/api", tags=["analysis"])
+logger = logging.getLogger(__name__)
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
@@ -30,6 +33,46 @@ class ManualHolding(BaseModel):
     quantity: float
     buy_price: float
     exchange: str = "NSE"
+
+
+class PortfolioRiskRequest(BaseModel):
+    """Raw holding data. `ticker`/`symbol` and `quantity` are required per item."""
+    holdings: List[Dict[str, Any]] = Field(default_factory=list)
+    include_llm_insight: bool = True
+    concentration_threshold_pct: float = Field(default=35, gt=0, le=100)
+    minimum_allocation_pct: float = Field(default=5, ge=0, le=100)
+
+
+@router.post("/analysis/risk-profile")
+def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current_user)):
+    """Produce stock, sector, and portfolio diversification JSON from raw holdings.
+
+    Each holding should provide ticker (or symbol), quantity, sector and current_price;
+    optional historical/fundamental fields improve the risk profile.
+    """
+    holdings = payload.holdings or DatabaseManager.get_holdings(user_id(user))
+    if not holdings:
+        raise HTTPException(status_code=400, detail="At least one holding is required.")
+    invalid = [index for index, holding in enumerate(holdings) if not (holding.get("ticker") or holding.get("symbol")) or holding.get("quantity") is None]
+    if invalid:
+        raise HTTPException(status_code=422, detail=f"Holdings at indexes {invalid} require ticker (or symbol) and quantity.")
+    try:
+        state = run_portfolio_pipeline(holdings)
+        report = state.report
+        sector = state.sector_analysis
+        risk = state.risk_analysis
+        return {
+            **state.model_dump(mode="json"),
+            # Compatibility fields let the existing dashboard progressively
+            # render the richer graph output without losing its summary view.
+            "summary": {"portfolio_risk_level": risk.portfolio_risk_level if risk else "Medium", "diversification_verdict": report.headline if report else "Portfolio analysis", "sarvam_insight": report.executive_summary if report else None},
+            "portfolio_diversification_analysis": {"sector_allocation": [{"sector": item.sector, "allocation_pct": item.allocation_pct} for item in (sector.findings if sector else [])], "concentration_flags": [{"sector": flag, "allocation_pct": 0} for flag in (sector.concentration_flags if sector else [])], "under_exposed_or_missing_sectors": sector.missing_sectors if sector else []},
+            "stock_level_risk_profiles": [{"ticker": item.ticker, "sector": next((holding.sector for holding in state.enriched_holdings if holding.ticker == item.ticker), "Unknown"), "overall_risk_rating": item.severity} for item in (risk.findings if risk else [])],
+            "executive_report": report.model_dump(mode="json") if report else None,
+        }
+    except PortfolioAnalysisUnavailable as exc:
+        logger.warning("Portfolio AI analysis unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="AI analysis is temporarily unavailable. Please retry.") from exc
 
 
 def parse_xlsx(raw: bytes) -> List[Dict[str, Any]]:
