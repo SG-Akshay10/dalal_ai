@@ -8,9 +8,53 @@ import styles from "./dashboard.module.css";
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
 type Position = { holding: Holding; invested_amount: number; current_amount?: number | null; quote?: { price?: number; source?: string; as_of?: string; previous_close?: number; day_change_pct?: number; currency?: string }; error?: string | null };
 type PortfolioAnalysis = { positions: Position[]; total_invested: number; total_current: number; price_coverage: number };
-type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null };
-type HistoryState = { data?: Candle[]; source?: string; error?: string; loading: boolean };
+type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null; rsi14?: number | null; macd?: number | null; macd_signal?: number | null; macd_histogram?: number | null };
+type IndicatorSummary = { rsi14?: number | null; macd?: number | null; macd_signal?: number | null; macd_histogram?: number | null; sma_crossover?: "bullish" | "bearish" | "neutral" };
+type HistoryState = { data?: Candle[]; indicators?: IndicatorSummary; source?: string; error?: string; loading: boolean };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function deriveIndicators(rows?: Candle[]): IndicatorSummary | undefined {
+  if (!rows?.length) return undefined;
+  const latest = rows[rows.length - 1];
+  const closes = rows.map((row) => row.close);
+  const ema = (period: number) => {
+    if (closes.length < period) return Array<number | null>(closes.length).fill(null);
+    const output: Array<number | null> = Array(closes.length).fill(null);
+    let value = closes.slice(0, period).reduce((sum, price) => sum + price, 0) / period;
+    output[period - 1] = value;
+    const multiplier = 2 / (period + 1);
+    for (let index = period; index < closes.length; index += 1) { value = (closes[index] - value) * multiplier + value; output[index] = value; }
+    return output;
+  };
+  const fast = ema(12), slow = ema(26);
+  const macd = closes.map((_, index) => fast[index] == null || slow[index] == null ? null : fast[index]! - slow[index]!);
+  const signal: Array<number | null> = Array(closes.length).fill(null);
+  const firstMacd = macd.findIndex((value) => value != null);
+  if (firstMacd >= 0 && macd.length - firstMacd >= 9) {
+    let value = macd.slice(firstMacd, firstMacd + 9).map((item) => item ?? 0).reduce((sum, item) => sum + item, 0) / 9;
+    signal[firstMacd + 8] = value;
+    const multiplier = 2 / 10;
+    for (let index = firstMacd + 9; index < macd.length; index += 1) { value = (macd[index]! - value) * multiplier + value; signal[index] = value; }
+  }
+  const histogram = macd.map((value, index) => value == null || signal[index] == null ? null : value - signal[index]!);
+  let gain = 0, loss = 0;
+  const rsiValues: Array<number | null> = Array(closes.length).fill(null);
+  if (closes.length > 14) {
+    for (let index = 1; index <= 14; index += 1) { const delta = closes[index] - closes[index - 1]; gain += Math.max(delta, 0); loss += Math.max(-delta, 0); }
+    const rsiValue = () => loss === 0 ? (gain === 0 ? 50 : 100) : 100 - (100 / (1 + gain / loss));
+    rsiValues[14] = rsiValue();
+    for (let index = 15; index < closes.length; index += 1) { const delta = closes[index] - closes[index - 1]; gain = (gain * 13 + Math.max(delta, 0)) / 14; loss = (loss * 13 + Math.max(-delta, 0)) / 14; rsiValues[index] = rsiValue(); }
+  }
+  const sma50 = [...rows].reverse().find((row) => row.sma50 != null)?.sma50;
+  const sma200 = [...rows].reverse().find((row) => row.sma200 != null)?.sma200;
+  return {
+    rsi14: latest.rsi14 ?? rsiValues.at(-1),
+    macd: latest.macd ?? macd.at(-1),
+    macd_signal: latest.macd_signal ?? signal.at(-1),
+    macd_histogram: latest.macd_histogram ?? histogram.at(-1),
+    sma_crossover: sma50 == null || sma200 == null ? "neutral" : sma50 > sma200 ? "bullish" : sma50 < sma200 ? "bearish" : "neutral",
+  };
+}
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -19,12 +63,34 @@ export default function DashboardPage() {
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null); const [busy, setBusy] = useState(""); const [message, setMessage] = useState("");
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(true);
   const [histories, setHistories] = useState<Record<string, HistoryState>>({});
+  const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({});
   async function token() { const response = await fetch("/api/auth/token"); return response.ok ? (await response.json()).token : null; }
-  async function load() { const auth = await token(); if (!auth) return; const response = await fetch(`${API_URL}/api/holdings`, { headers: { Authorization: `Bearer ${auth}` } }); if (response.ok) { const items = await response.json(); setHoldings(items); setIsAddPanelOpen(items.length === 0); } }
+  async function loadDashboard() {
+    const auth = await token();
+    if (!auth) return;
+    const headers = { Authorization: `Bearer ${auth}` };
+    const [holdingsResponse, portfolioResponse] = await Promise.all([
+      fetch(`${API_URL}/api/holdings`, { headers }),
+      fetch(`${API_URL}/api/analysis/portfolio`, { headers }),
+    ]);
+    let loadedHoldings: Holding[] = [];
+    if (holdingsResponse.ok) {
+      loadedHoldings = await holdingsResponse.json();
+      setHoldings(loadedHoldings);
+      setIsAddPanelOpen(loadedHoldings.length === 0);
+    }
+    if (portfolioResponse.ok) {
+      const result = await portfolioResponse.json();
+      setAnalysis(result);
+      window.sessionStorage.setItem("portfolio-analysis", JSON.stringify(result));
+      // Start chart prefetching only after the quote snapshot is displayed, so
+      // expanding a chart is fast without delaying the portfolio values.
+      void Promise.all(loadedHoldings.map((holding) => loadHistory(holding, auth)));
+    }
+  }
   // Initial portfolio hydration is an intentional external-data sync.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
+    loadDashboard();
     const restore = window.sessionStorage.getItem("portfolio-analysis");
     if (restore) {
       try { setAnalysis(JSON.parse(restore)); } catch { window.sessionStorage.removeItem("portfolio-analysis"); }
@@ -34,27 +100,21 @@ export default function DashboardPage() {
     return () => window.removeEventListener("portfolio-signout", clearAnalysis);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    if (!holdings.length) return;
-    let cancelled = false;
-    const loadHistories = async () => {
-      const auth = await token();
-      if (!auth || cancelled) return;
-      await Promise.all(holdings.map(async (holding) => {
-        setHistories((current) => ({ ...current, [holding.id]: { ...current[holding.id], loading: true } }));
-        try {
-          const response = await fetch(`${API_URL}/api/analysis/history/${encodeURIComponent(holding.symbol)}?exchange=${encodeURIComponent(holding.exchange || "NSE")}`, { headers: { Authorization: `Bearer ${auth}` } });
-          const result = await response.json();
-          if (cancelled) return;
-          setHistories((current) => ({ ...current, [holding.id]: response.ok ? { data: result.history, source: result.source, loading: false } : { error: result.detail || "Price history is unavailable.", loading: false } }));
-        } catch {
-          if (!cancelled) setHistories((current) => ({ ...current, [holding.id]: { error: "Price history is unavailable.", loading: false } }));
-        }
-      }));
-    };
-    loadHistories();
-    return () => { cancelled = true; };
-  }, [holdings]);
+  async function loadHistory(holding: Holding, auth?: string) {
+    if (histories[holding.id]?.loading || histories[holding.id]?.data) return;
+    setHistories((current) => ({ ...current, [holding.id]: { ...current[holding.id], loading: true } }));
+    try {
+      const accessToken = auth ?? await token();
+      if (!accessToken) throw new Error("Your session has expired. Please sign in again.");
+      const response = await fetch(`${API_URL}/api/analysis/history/${encodeURIComponent(holding.symbol)}?exchange=${encodeURIComponent(holding.exchange || "NSE")}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const result = await response.json();
+      const derived = deriveIndicators(result.history);
+      const indicators = result.indicators ? { ...derived, ...result.indicators, rsi14: result.indicators.rsi14 ?? derived?.rsi14, macd: result.indicators.macd ?? derived?.macd, macd_signal: result.indicators.macd_signal ?? derived?.macd_signal, macd_histogram: result.indicators.macd_histogram ?? derived?.macd_histogram } : derived;
+      setHistories((current) => ({ ...current, [holding.id]: response.ok ? { data: result.history, indicators, source: result.source, loading: false } : { error: result.detail || "Price history is unavailable.", loading: false } }));
+    } catch (error) {
+      setHistories((current) => ({ ...current, [holding.id]: { error: error instanceof Error ? error.message : "Price history is unavailable.", loading: false } }));
+    }
+  }
   async function addManual(event: React.FormEvent) {
     event.preventDefault();
     setBusy("adding");
@@ -84,15 +144,15 @@ export default function DashboardPage() {
       setSymbol("");
       setQuantity("");
       setBuyPrice("");
-      setMessage("Holding added. Analyze the portfolio when you’re ready.");
-      await load();
+      setMessage("Holding added. Market prices are updating now.");
+      await loadDashboard();
     } else {
       setMessage("Please enter a valid symbol, quantity, and average price.");
     }
     setBusy("");
   }
-  async function importFile() { if (!file) return; setBusy("importing"); const auth = await token(); const body = new FormData(); body.append("file", file); const response = await fetch(`${API_URL}/api/holdings/import`, { method: "POST", headers: { Authorization: `Bearer ${auth}` }, body }); const data = await response.json(); setMessage(response.ok ? `${data.count} equity holdings imported.` : data.detail || "Import failed."); if (response.ok) { setFile(null); await load(); } setBusy(""); }
-  async function analyzePortfolio() { setBusy("analyzing"); setMessage(""); const auth = await token(); const response = await fetch(`${API_URL}/api/analysis/portfolio`, { headers: { Authorization: `Bearer ${auth}` } }); if (response.ok) { const result = await response.json(); setAnalysis(result); window.sessionStorage.setItem("portfolio-analysis", JSON.stringify(result)); } else setMessage("Portfolio analysis could not be completed. Please try again."); setBusy(""); }
+  async function importFile() { if (!file) return; setBusy("importing"); const auth = await token(); const body = new FormData(); body.append("file", file); const response = await fetch(`${API_URL}/api/holdings/import`, { method: "POST", headers: { Authorization: `Bearer ${auth}` }, body }); const data = await response.json(); setMessage(response.ok ? `${data.count} equity holdings imported.` : data.detail || "Import failed."); if (response.ok) { setFile(null); await loadDashboard(); } setBusy(""); }
+  async function analyzePortfolio() { setBusy("analyzing"); setMessage(""); await loadDashboard(); setBusy(""); }
   async function remove(id: string) {
     const auth = await token();
     if (!auth) {
@@ -112,6 +172,7 @@ export default function DashboardPage() {
 
     setHoldings((items) => items.filter((item) => item.id !== id));
     setHistories((current) => { const next = { ...current }; delete next[id]; return next; });
+    setOpenCharts((current) => { const next = { ...current }; delete next[id]; return next; });
     setAnalysis(null);
     window.sessionStorage.removeItem("portfolio-analysis");
   }
@@ -121,7 +182,7 @@ export default function DashboardPage() {
     const auth = await token();
     if (!auth) { setMessage("Your session has expired. Please sign in again."); setBusy(""); return; }
     const responses = await Promise.all(holdings.map((holding) => fetch(`${API_URL}/api/holdings/${holding.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${auth}` } })));
-    if (responses.every((response) => response.ok)) { setHoldings([]); setHistories({}); setAnalysis(null); setIsAddPanelOpen(true); window.sessionStorage.removeItem("portfolio-analysis"); setMessage("All holdings cleared."); }
+    if (responses.every((response) => response.ok)) { setHoldings([]); setHistories({}); setOpenCharts({}); setAnalysis(null); setIsAddPanelOpen(true); window.sessionStorage.removeItem("portfolio-analysis"); setMessage("All holdings cleared."); }
     else setMessage("Some holdings could not be cleared. Please try again.");
     setBusy("");
   }
@@ -141,7 +202,7 @@ export default function DashboardPage() {
       <div className={styles.importRow}><label className={styles.fileLabel}>Import CSV or XLSX<input type="file" accept=".csv,.xlsx" onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)} /></label><span className={styles.fileName}>{file?.name}</span><button className="btn btnOutline" onClick={importFile} disabled={!file || busy === "importing"}>{busy === "importing" ? "Importing…" : "Import holdings"}</button></div>
       </div>}{message && <p className={styles.message} role="status">{message}</p>}
     </section>
-    <div className={styles.sectionHeading}><div><div className={styles.eyebrow}>YOUR HOLDINGS</div><h2>Portfolio positions <span className={styles.count}>{holdings.length}</span></h2></div><div className={styles.stockActions}><span className={styles.helper}>{session?.user?.email}</span>{holdings.length > 0 && <><button className="btn" onClick={analyzePortfolio} disabled={busy === "analyzing"}>{busy === "analyzing" ? "Analyzing portfolio…" : analysis ? "Refresh portfolio analysis" : "Analyze portfolio"}</button><button className="btn btnDanger clearButton" onClick={clearPortfolio} disabled={busy === "clearing"}>{busy === "clearing" ? "Clearing…" : "Clear portfolio"}</button></>}</div></div>
-    {holdings.length === 0 ? <div className={styles.empty}>Add a holding manually or import the spreadsheet to begin.</div> : <div className={styles.holdingList}>{analysis && <div className={styles.metrics}><div><small>Total invested</small><strong>{money(analysis.total_invested)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Current value</small><strong>{money(analysis.total_current)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Total return</small><strong className={analysis.total_current >= analysis.total_invested ? styles.goodText : styles.badText}>{percent(returnPercent(analysis.total_current, analysis.total_invested))}</strong></div><div><small>Price coverage</small><strong>{pricedCount} of {holdings.length}</strong></div><div><small>Latest snapshot</small><strong className={styles.metricDetail}>{snapshotLabel || "Not available"}</strong><span className={styles.metricCaption}>{quoteSources.join(", ") || "No quote source"}</span></div></div>}{holdings.map((holding) => { const item = analysis?.positions.find((position) => position.holding.id === holding.id); const history = histories[holding.id]; const change = returnPercent(item?.current_amount, item?.invested_amount); const positive = change != null && change >= 0; const performanceClass = change == null ? styles.valueTile : positive ? styles.profitTile : styles.lossTile; const valueClass = `${styles.valueTile} ${performanceClass}`; return <article className={styles.stockCard} key={holding.id}><div className={styles.stockTop}><div><span className={styles.stockSymbol}>{holding.symbol}</span><span className={styles.stockName}>{holding.company_name}</span></div><button className={styles.removeButton} onClick={() => remove(holding.id)}>Remove</button></div><div className={styles.bentoGrid}><div><small>Quantity</small><strong>{holding.quantity ?? "—"}</strong></div><div><small>Average price</small><strong>{money(holding.buy_price)}</strong></div>{item && <><div><small>Market price</small><strong>{money(item.quote?.price)}</strong></div><div><small>Invested</small><strong>{money(item.invested_amount)}</strong></div><div className={valueClass}><small>Current value</small><strong>{money(item.current_amount)}</strong></div><div className={performanceClass}><small>Profit / loss</small><strong>{percent(change)}</strong></div></>}</div>{history?.loading && <div className={styles.chartStatus}>Loading two-year price chart…</div>}{history?.error && <p className={styles.chartError}>{history.error}</p>}{history?.data && <><PriceChart data={history.data} /><p className={styles.chartSource}>2-year daily data · {history.source}</p></>}{item?.error && <p className={styles.quoteError}>{item.error}</p>}</article>; })}</div>}
+    <div className={styles.sectionHeading}><div><div className={styles.eyebrow}>YOUR HOLDINGS</div><h2>Portfolio positions <span className={styles.count}>{holdings.length}</span></h2></div><div className={styles.stockActions}><span className={styles.helper}>{session?.user?.email}</span>{holdings.length > 0 && <><button className="btn" onClick={analyzePortfolio} disabled={busy === "analyzing"}>{busy === "analyzing" ? "Refreshing prices…" : "Refresh market prices"}</button><button className="btn btnDanger clearButton" onClick={clearPortfolio} disabled={busy === "clearing"}>{busy === "clearing" ? "Clearing…" : "Clear portfolio"}</button></>}</div></div>
+    {holdings.length === 0 ? <div className={styles.empty}>Add a holding manually or import the spreadsheet to begin.</div> : <div className={styles.holdingList}>{analysis && <div className={styles.metrics}><div><small>Total invested</small><strong>{money(analysis.total_invested)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Current value</small><strong>{money(analysis.total_current)}</strong></div><div className={analysis.total_current >= analysis.total_invested ? styles.returnPositive : styles.returnNegative}><small>Total return</small><strong className={analysis.total_current >= analysis.total_invested ? styles.goodText : styles.badText}>{percent(returnPercent(analysis.total_current, analysis.total_invested))}</strong></div><div><small>Price coverage</small><strong>{pricedCount} of {holdings.length}</strong></div><div><small>Latest snapshot</small><strong className={styles.metricDetail}>{snapshotLabel || "Not available"}</strong><span className={styles.metricCaption}>{quoteSources.join(", ") || "No quote source"}</span></div></div>}{holdings.map((holding) => { const item = analysis?.positions.find((position) => position.holding.id === holding.id); const history = histories[holding.id]; const indicators = history?.indicators; const isChartOpen = openCharts[holding.id] === true; const rsiLabel = indicators?.rsi14 == null ? "Unavailable" : indicators.rsi14 >= 70 ? "Overbought" : indicators.rsi14 <= 30 ? "Oversold" : "Neutral"; const crossoverLabel = indicators?.sma_crossover ? indicators.sma_crossover[0].toUpperCase() + indicators.sma_crossover.slice(1) : "Unavailable"; const change = returnPercent(item?.current_amount, item?.invested_amount); const positive = change != null && change >= 0; const performanceClass = change == null ? styles.valueTile : positive ? styles.profitTile : styles.lossTile; const valueClass = `${styles.valueTile} ${performanceClass}`; const chartId = `price-chart-${holding.id}`; return <article className={styles.stockCard} key={holding.id}><div className={styles.stockTop}><div><span className={styles.stockSymbol}>{holding.symbol}</span><span className={styles.stockName}>{holding.company_name}</span></div><div className={styles.stockCardActions}><button type="button" className={styles.chartCollapseButton} aria-label={isChartOpen ? `Collapse ${holding.symbol} chart` : `Expand ${holding.symbol} chart`} aria-expanded={isChartOpen} aria-controls={chartId} onClick={() => { if (!isChartOpen) void loadHistory(holding); setOpenCharts((current) => ({ ...current, [holding.id]: !isChartOpen })); }}>{isChartOpen ? "^" : "⌄"}</button><button className={styles.removeButton} onClick={() => remove(holding.id)}>Remove</button></div></div><div className={styles.bentoGrid}><div><small>Quantity</small><strong>{holding.quantity ?? "—"}</strong></div><div><small>Average price</small><strong>{money(holding.buy_price)}</strong></div>{item && <><div><small>Market price</small><strong>{money(item.quote?.price)}</strong></div><div><small>Invested</small><strong>{money(item.invested_amount)}</strong></div><div className={valueClass}><small>Current value</small><strong>{money(item.current_amount)}</strong></div><div className={performanceClass}><small>Profit / loss</small><strong>{percent(change)}</strong></div></>}<div className={styles.indicatorTile}><small>RSI (14)</small><strong>{indicators?.rsi14 == null ? "—" : indicators.rsi14.toFixed(1)}</strong><span>{rsiLabel}</span></div><div className={styles.indicatorTile}><small>SMA 50 / 200</small><strong>{crossoverLabel}</strong><span>Long-term trend</span></div><div className={styles.indicatorTile}><small>MACD histogram</small><strong>{indicators?.macd_histogram == null ? "—" : indicators.macd_histogram.toFixed(2)}</strong><span>{indicators?.macd_histogram == null ? "Unavailable" : indicators.macd_histogram >= 0 ? "Positive" : "Negative"}</span></div></div>{isChartOpen && <div id={chartId}>{history?.loading && <div className={styles.chartStatus}>Loading two-year price chart…</div>}{history?.error && <p className={styles.chartError}>{history.error}</p>}{history?.data && <><PriceChart data={history.data} /><p className={styles.chartSource}>2-year daily data · {history.source}</p></>}</div>}{item?.error && <p className={styles.quoteError}>{item.error}</p>}</article>; })}</div>}
   </div>;
 }

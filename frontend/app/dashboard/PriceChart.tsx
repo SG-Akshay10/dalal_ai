@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart } from "lightweight-charts";
 import styles from "./dashboard.module.css";
 
-type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null };
+type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null; rsi14?: number | null; macd?: number | null; macd_signal?: number | null; macd_histogram?: number | null };
 
 export default function PriceChart({ data }: { data: Candle[] }) {
   const container = useRef<HTMLDivElement>(null);

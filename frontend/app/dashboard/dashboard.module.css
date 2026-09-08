@@ -701,6 +701,9 @@
 .holdingMeta span { white-space:nowrap; }
 .bentoGrid { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:.65rem; margin-top:1.15rem; }
 .bentoGrid > div { min-height:82px; display:flex; flex-direction:column; justify-content:space-between; gap:.2rem; padding:.8rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-soft); }
+.indicatorTile { min-height:82px; display:flex; flex-direction:column; justify-content:space-between; gap:.2rem; padding:.8rem; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-soft); }
+.indicatorTile small { color:var(--text-secondary); font-size:.7rem; }.indicatorTile strong { font-size:1.05rem; letter-spacing:-.02em; }.indicatorTile span { color:var(--text-muted); font-size:.68rem; }
+.legendRsi { color:#f97316; }.legendMacd { color:#38bdf8; }
 .bentoGrid small, .bentoGrid em { color:var(--text-secondary); font-size:.7rem; font-style:normal; }
 .bentoGrid strong { font-size:1.05rem; letter-spacing:-.02em; }
 .valueTile { background:rgba(39,114,75,.09)!important; border-color:rgba(39,114,75,.22)!important; }
@@ -717,6 +720,10 @@
 .chartSource { margin:.45rem .1rem 0; color:var(--text-muted); font-size:.7rem; }
 .removeButton { padding:.35rem .5rem; border-radius:999px; }
 .removeButton:hover { background:var(--bg-soft); }
+.stockCardActions { display:flex; align-items:center; gap:.25rem; }
+.chartCollapseButton { width:30px; height:30px; border:1px solid var(--border); border-radius:8px; background:var(--bg-soft); color:var(--text-secondary); cursor:pointer; font:700 1rem/1 inherit; }
+.chartCollapseButton:hover { border-color:var(--accent-primary); color:var(--accent-primary); background:rgba(39,114,75,.08); }
+.chartCollapseButton:focus-visible { outline:3px solid rgba(36,91,66,.22); outline-offset:2px; }
 
 @media (max-width:700px) {
   .wrapper { padding:1.25rem 1rem 3rem; }

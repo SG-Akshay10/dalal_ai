@@ -4,13 +4,14 @@ import io
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.database import DatabaseManager
-from app.services.market_data import market_snapshot
+from app.services.market_data import market_quote, market_snapshot
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
@@ -98,24 +99,25 @@ async def import_holdings(file: UploadFile = File(...), user: dict = Depends(get
 @router.get("/analysis/portfolio")
 def analyze_portfolio(user: dict = Depends(get_current_user)):
     holdings = DatabaseManager.get_holdings(user_id(user))
-    positions = []
-    total_invested = 0.0
-    total_current = 0.0
-    for holding in holdings:
+    def build_position(holding: Dict[str, Any]) -> Dict[str, Any]:
         quantity = float(holding.get("quantity") or 0)
         buy_price = float(holding.get("buy_price") or 0)
         invested = quantity * buy_price
         position = {"holding": holding, "invested_amount": invested, "current_amount": None, "quote": None, "error": None}
-        total_invested += invested
         try:
-            quote = market_snapshot(holding["symbol"], holding.get("exchange", "NSE"))
+            quote = market_quote(holding["symbol"], holding.get("exchange", "NSE"))
             position["quote"] = {key: quote.get(key) for key in ("price", "previous_close", "day_change_pct", "source", "as_of", "currency")}
             if quote.get("price") is not None:
                 position["current_amount"] = quantity * float(quote["price"])
-                total_current += position["current_amount"]
         except Exception as exc:
             position["error"] = str(exc)
-        positions.append(position)
+        return position
+    # Quote requests are I/O bound; fetch positions concurrently so latency is
+    # determined by the slowest holding rather than every holding combined.
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(holdings)))) as executor:
+        positions = list(executor.map(build_position, holdings))
+    total_invested = sum(position["invested_amount"] for position in positions)
+    total_current = sum(position["current_amount"] or 0 for position in positions)
     return {"positions": positions, "total_invested": total_invested, "total_current": total_current,
             "price_coverage": sum(1 for item in positions if item["current_amount"] is not None)}
 
@@ -132,6 +134,7 @@ def stock_history(symbol: str, exchange: str = "NSE", user: dict = Depends(get_c
         "symbol": snapshot["symbol"],
         "exchange": snapshot["exchange"],
         "history": snapshot["history"],
+        "indicators": snapshot["indicators"],
         "source": snapshot["source"],
         "as_of": snapshot["as_of"],
     }

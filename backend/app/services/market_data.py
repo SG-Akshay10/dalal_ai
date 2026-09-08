@@ -167,6 +167,60 @@ def _sma(values: list[Optional[float]], window: int) -> list[Optional[float]]:
     return output
 
 
+def _ema(values: list[float], period: int) -> list[Optional[float]]:
+    """EMA seeded with the first full-period SMA, matching common charting tools."""
+    output: list[Optional[float]] = [None] * len(values)
+    if len(values) < period:
+        return output
+    ema = sum(values[:period]) / period
+    output[period - 1] = ema
+    multiplier = 2 / (period + 1)
+    for index in range(period, len(values)):
+        ema = (values[index] - ema) * multiplier + ema
+        output[index] = ema
+    return output
+
+
+def _rsi(values: list[float], period: int = 14) -> list[Optional[float]]:
+    """Wilder's RSI; the first reading follows one complete period of changes."""
+    output: list[Optional[float]] = [None] * len(values)
+    if len(values) <= period:
+        return output
+    gains = [max(values[index] - values[index - 1], 0) for index in range(1, len(values))]
+    losses = [max(values[index - 1] - values[index], 0) for index in range(1, len(values))]
+    average_gain, average_loss = sum(gains[:period]) / period, sum(losses[:period]) / period
+
+    def value() -> float:
+        if average_loss == 0:
+            return 100.0 if average_gain else 50.0
+        return 100 - (100 / (1 + average_gain / average_loss))
+
+    output[period] = value()
+    for index in range(period + 1, len(values)):
+        average_gain = ((average_gain * (period - 1)) + gains[index - 1]) / period
+        average_loss = ((average_loss * (period - 1)) + losses[index - 1]) / period
+        output[index] = value()
+    return output
+
+
+def _macd(values: list[float], fast: int = 12, slow: int = 26, signal_period: int = 9) -> tuple[list[Optional[float]], list[Optional[float]], list[Optional[float]]]:
+    fast_ema, slow_ema = _ema(values, fast), _ema(values, slow)
+    macd = [fast_ema[index] - slow_ema[index] if fast_ema[index] is not None and slow_ema[index] is not None else None for index in range(len(values))]
+    present = [value for value in macd if value is not None]
+    signal_values = _ema(present, signal_period)
+    signal: list[Optional[float]] = [None] * len(values)
+    first_macd = next((index for index, value in enumerate(macd) if value is not None), len(values))
+    for index, value in enumerate(signal_values):
+        if value is not None and first_macd + index < len(signal):
+            signal[first_macd + index] = value
+    histogram = [macd[index] - signal[index] if macd[index] is not None and signal[index] is not None else None for index in range(len(values))]
+    return macd, signal, histogram
+
+
+def _latest(values: list[Optional[float]]) -> Optional[float]:
+    return next((value for value in reversed(values) if value is not None), None)
+
+
 def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
     """Return quote, fundamentals, and two years of daily chart data."""
     normalized_symbol = _normalize_symbol(symbol)
@@ -197,8 +251,14 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                          "volume": _finite((quote.get("volume") or [])[index]) or 0})
         closes = [row["close"] for row in rows]
         sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
+        rsi = _rsi(closes)
+        macd, macd_signal, macd_histogram = _macd(closes)
         for index, row in enumerate(rows):
             row["sma50"], row["sma200"] = sma50[index], sma200[index]
+            row["rsi14"] = rsi[index]
+            row["macd"] = macd[index]
+            row["macd_signal"] = macd_signal[index]
+            row["macd_histogram"] = macd_histogram[index]
             window = closes[max(0, index - 19): index + 1]
             if len(window) == 20:
                 mean = sum(window) / 20
@@ -208,11 +268,15 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                 row["bollinger_upper"] = row["bollinger_lower"] = None
         price = _finite(meta.get("regularMarketPrice")) or (rows[-1]["close"] if rows else None)
         previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
+        latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
+        crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
         return {"symbol": normalized_symbol, "exchange": exchange.upper(), "name": meta.get("longName") or normalized_symbol,
                 "price": price, "previous_close": previous,
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
                 "volume": rows[-1]["volume"] if rows else None, "currency": meta.get("currency", "INR"),
-                "history": rows, "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
+                "history": rows,
+                "indicators": {"rsi14": _latest(rsi), "macd": _latest(macd), "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram), "sma_crossover": crossover},
+                "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
 
     snapshot = _cached(f"snapshot:{yahoo_symbol}", 60, load)
     # quoteSummary provides PE and D/E; absence should not make the chart fail.
@@ -228,3 +292,28 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
         snapshot.setdefault("pe_ratio", None)
         snapshot.setdefault("de_ratio", None)
     return snapshot
+
+
+def market_quote(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
+    """Return the latest quote without loading a full chart series."""
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_exchange = exchange.upper()
+    yahoo_symbol = f"{normalized_symbol}.{ 'NS' if normalized_exchange == 'NSE' else 'BO' }"
+
+    def load():
+        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "5d", "interval": "1d"}, 6)
+        chart = (result.get("chart") or {}).get("result") or []
+        if not chart:
+            raise ValueError("Yahoo returned no quote data")
+        item = chart[0]
+        meta = item.get("meta", {})
+        closes = ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or [])
+        price = _finite(meta.get("regularMarketPrice")) or _latest([_finite(close) for close in closes])
+        previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
+        return {"symbol": normalized_symbol, "exchange": normalized_exchange, "price": price,
+                "previous_close": previous,
+                "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
+                "currency": meta.get("currency", "INR"), "source": "Yahoo Finance (delayed)",
+                "as_of": datetime.now(timezone.utc).isoformat()}
+
+    return _cached(f"quote:{yahoo_symbol}", 30, load)
