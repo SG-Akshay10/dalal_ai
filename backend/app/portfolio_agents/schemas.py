@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 
+# Shared threshold: portfolios with more than this many individual holdings
+# skip per-stock thesis/technical analysis and rely on sector-wide analysis only.
+STOCK_LEVEL_ANALYSIS_LIMIT = 20
+
 
 class HoldingInput(BaseModel):
     ticker: str | None = None
@@ -82,6 +86,36 @@ class RiskAnalysis(BaseModel):
     portfolio_risk_level: Literal["Low", "Medium", "High"]
 
 
+class StockThesisFinding(BaseModel):
+    ticker: str
+    sector: str
+    growth_drivers: list[str] = Field(default_factory=list)
+    decline_risks: list[str] = Field(default_factory=list)
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+    narrative: str = ""
+
+
+class StockThesis(BaseModel):
+    applicable: bool
+    reason_if_not_applicable: str = ""
+    findings: list[StockThesisFinding] = Field(default_factory=list)
+
+
+class SectorThesisFinding(BaseModel):
+    sector: str
+    growth_drivers: list[str] = Field(default_factory=list)
+    headwinds: list[str] = Field(default_factory=list)
+    policy_geopolitical_factors: list[str] = Field(default_factory=list)
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+    narrative: str = ""
+
+
+class SectorThesis(BaseModel):
+    findings: list[SectorThesisFinding] = Field(default_factory=list)
+
+
 class CriticResult(BaseModel):
     passed: bool
     issues: list[str] = Field(default_factory=list)
@@ -93,6 +127,8 @@ class ExecutiveReport(BaseModel):
     sector_commentary: str
     asset_commentary: str = ""
     risk_commentary: str
+    stock_thesis_commentary: str = ""
+    sector_thesis_commentary: str = ""
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
 
@@ -103,6 +139,8 @@ class PortfolioState(BaseModel):
     sector_analysis: SectorAnalysis | None = None
     asset_analysis: AssetAnalysis | None = None
     risk_analysis: RiskAnalysis | None = None
+    stock_thesis: StockThesis | None = None
+    sector_thesis: SectorThesis | None = None
     critic: CriticResult | None = None
     report: ExecutiveReport | None = None
     retry_count: int = 0

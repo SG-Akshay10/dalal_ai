@@ -3,7 +3,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from app.services.sarvam import SarvamStructuredOutputError
-from .agents import asset_agent, critic_agent, ingestion_agent, risk_agent, sector_agent, synthesizer_agent
+from .agents import asset_agent, critic_agent, ingestion_agent, risk_agent, sector_agent, sector_thesis_agent, stock_thesis_agent, synthesizer_agent
 from .schemas import PortfolioState
 
 
@@ -31,6 +31,14 @@ def _risk(state):
     return risk_agent(_model(state))
 
 
+def _stock_thesis(state):
+    return stock_thesis_agent(_model(state))
+
+
+def _sector_thesis(state):
+    return sector_thesis_agent(_model(state))
+
+
 def _critic(state):
     return critic_agent(_model(state))
 
@@ -38,8 +46,8 @@ def _critic(state):
 def _retry(state):
     model = _model(state)
     feedback = "; ".join(model.critic.issues if model.critic else [])
-    # Re-run every LLM analyst once with the critic feedback before rechecking.
-    updated = {**sector_agent(model, feedback), **asset_agent(model, feedback), **risk_agent(model, feedback)}
+    # Re-run every independent analyst once with the critic feedback before rechecking.
+    updated = {**sector_agent(model, feedback), **asset_agent(model, feedback), **risk_agent(model, feedback), **stock_thesis_agent(model, feedback), **sector_thesis_agent(model, feedback)}
     return {**updated, "retry_count": model.retry_count + 1}
 
 
@@ -60,6 +68,8 @@ def build_portfolio_graph():
     graph.add_node("sector", _sector)
     graph.add_node("asset", _asset)
     graph.add_node("risk", _risk)
+    graph.add_node("stock_thesis", _stock_thesis)
+    graph.add_node("sector_thesis", _sector_thesis)
     graph.add_node("critic", _critic)
     graph.add_node("retry", _retry)
     graph.add_node("synthesize", _synthesize)
@@ -67,7 +77,9 @@ def build_portfolio_graph():
     graph.add_edge("ingestion", "sector")
     graph.add_edge("ingestion", "asset")
     graph.add_edge("ingestion", "risk")
-    graph.add_edge(["sector", "asset", "risk"], "critic")
+    graph.add_edge("ingestion", "stock_thesis")
+    graph.add_edge("ingestion", "sector_thesis")
+    graph.add_edge(["sector", "asset", "risk", "stock_thesis", "sector_thesis"], "critic")
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
     graph.add_edge("synthesize", END)

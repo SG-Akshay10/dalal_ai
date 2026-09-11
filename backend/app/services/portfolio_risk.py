@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.services.sarvam import summarize_portfolio_risk
+from app.services.sector_lookup import fetch_sector
 
 # Broad categories make missing exposure explicit rather than pretending every
 # portfolio must own every possible industry.
@@ -68,7 +69,11 @@ def stock_level_risk_profile(holdings: List[Dict[str, Any]]) -> List[Dict[str, A
     for holding in holdings:
         symbol = str(holding.get("ticker") or holding.get("symbol") or "UNKNOWN").upper()
         errors = []
-        sector = holding.get("sector") or SYMBOL_SECTORS.get(symbol)
+        sector = holding.get("sector")
+        if not sector:
+            sector = fetch_sector(symbol, holding.get("exchange", "NSE"))
+            if sector == "Unknown":
+                sector = SYMBOL_SECTORS.get(symbol)
         if not sector:
             errors.append("Missing sector")
         volatility = _number(holding.get("annualized_volatility_pct")) or _annualized_volatility(holding.get("historical_prices") or [])

@@ -6,7 +6,18 @@ from typing import Any
 
 from app.services.market_data import market_snapshot
 from app.services.portfolio_risk import DEFAULT_SECTORS, SYMBOL_SECTORS
+from app.services.sector_lookup import fetch_sector
 from .schemas import EnrichedHolding, HoldingInput, Technicals
+
+
+def resolve_sector(ticker: str, provided_sector: str | None, exchange: str = "NSE") -> str:
+    """Resolve sector preferring an explicit value, then Yahoo Finance, then the static fallback map."""
+    if provided_sector:
+        return provided_sector
+    sector = fetch_sector(ticker, exchange)
+    if sector and sector != "Unknown":
+        return sector
+    return SYMBOL_SECTORS.get(ticker, "Unknown")
 
 
 def _finite(value: Any) -> float | None:
@@ -42,7 +53,7 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     if price is None:
         errors.append("Current price unavailable")
     pnl = ((price - holding.buy_price) / holding.buy_price * 100) if price is not None and holding.buy_price else None
-    return EnrichedHolding(ticker=ticker, sector=holding.sector or SYMBOL_SECTORS.get(ticker, "Unknown"), quantity=holding.quantity, buy_price=holding.buy_price, current_price=price, market_value=price * holding.quantity if price is not None else None, pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators), data_errors=errors)
+    return EnrichedHolding(ticker=ticker, sector=resolve_sector(ticker, holding.sector, holding.exchange), quantity=holding.quantity, buy_price=holding.buy_price, current_price=price, market_value=price * holding.quantity if price is not None else None, pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators), data_errors=errors)
 
 
 def allocation(holdings: list[EnrichedHolding]) -> tuple[dict[str, float], float]:

@@ -79,6 +79,58 @@ SAMPLE_FILINGS = {
 
 import email.utils
 from datetime import timezone, timedelta
+from urllib.parse import quote
+
+
+def fetch_sector_news(sector: str) -> List[Dict[str, Any]]:
+    """Fetch recent sector/industry-level news for policy, regulation, and geopolitical context.
+
+    Unlike per-stock news, this is not persisted or classified via Sarvam; it is
+    consumed directly by the sector thesis agent as grounding context.
+    """
+    items: List[Dict[str, Any]] = []
+    query = quote(f"{sector} sector India policy regulation tariff geopolitics government when:14d")
+    rss_url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.get(rss_url)
+            if resp.status_code == 200:
+                root = ET.fromstring(resp.content)
+                for entry in root.findall("./channel/item")[:12]:
+                    title_elem = entry.find("title")
+                    link_elem = entry.find("link")
+                    pubdate_elem = entry.find("pubDate")
+
+                    if title_elem is not None and title_elem.text:
+                        pub_dt = None
+                        if pubdate_elem is not None and pubdate_elem.text:
+                            try:
+                                pub_dt = email.utils.parsedate_to_datetime(pubdate_elem.text)
+                            except Exception:
+                                pub_dt = None
+                        if not pub_dt:
+                            pub_dt = datetime.now(timezone.utc)
+                        if pub_dt < cutoff:
+                            continue
+
+                        title_text = title_elem.text.rsplit(" - ", 1)[0]
+                        source_text = title_elem.text.rsplit(" - ", 1)[1] if " - " in title_elem.text else "Market News"
+
+                        items.append({
+                            "sector": sector,
+                            "title": title_text,
+                            "source": source_text,
+                            "url": link_elem.text if link_elem is not None else "https://news.google.com",
+                            "published_at": pub_dt.astimezone(timezone.utc).isoformat()
+                        })
+    except Exception as e:
+        logger.info(f"Sector RSS fetch for {sector} returned notice ({e})")
+
+    return items
+
+
 def fetch_rss_news(symbol: str) -> List[Dict[str, Any]]:
     """
     Fetches real news items via Google News RSS search for a given stock symbol published within the last 3 days.

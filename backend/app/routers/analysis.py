@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from app.auth import get_current_user
 from app.database import DatabaseManager
 from app.services.market_data import market_quote, market_snapshot
+from app.services.sector_lookup import fetch_sector
 from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
 
 router = APIRouter(prefix="/api", tags=["analysis"])
@@ -175,7 +176,7 @@ def analyze_portfolio(user: dict = Depends(get_current_user)):
         quantity = float(holding.get("quantity") or 0)
         buy_price = float(holding.get("buy_price") or 0)
         invested = quantity * buy_price
-        position = {"holding": holding, "invested_amount": invested, "current_amount": None, "quote": None, "error": None}
+        position = {"holding": holding, "invested_amount": invested, "current_amount": None, "quote": None, "error": None, "sector": None}
         try:
             quote = market_quote(holding["symbol"], holding.get("exchange", "NSE"))
             position["quote"] = {key: quote.get(key) for key in ("price", "previous_close", "day_change_pct", "source", "as_of", "currency")}
@@ -183,6 +184,10 @@ def analyze_portfolio(user: dict = Depends(get_current_user)):
                 position["current_amount"] = quantity * float(quote["price"])
         except Exception as exc:
             position["error"] = str(exc)
+        try:
+            position["sector"] = holding.get("sector") or fetch_sector(holding["symbol"], holding.get("exchange", "NSE"))
+        except Exception:
+            position["sector"] = "Unknown"
         return position
     # Quote requests are I/O bound; fetch positions concurrently so latency is
     # determined by the slowest holding rather than every holding combined.
