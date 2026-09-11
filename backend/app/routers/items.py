@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.auth import get_current_user

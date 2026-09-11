@@ -63,7 +63,14 @@ export default function Navbar() {
           </svg>
         </button>
         {status === "authenticated" ? (
-          <div className={styles.accountMenu} ref={accountMenuRef}>
+          <>
+            <Link href="/dashboard" className={styles.link}>
+              Dashboard
+            </Link>
+            <Link href="/ai-analysis" className={styles.link}>
+              AI Analysis
+            </Link>
+            <div className={styles.accountMenu} ref={accountMenuRef}>
             <button
               type="button"
               className={styles.avatar}
@@ -87,7 +94,9 @@ export default function Navbar() {
                 </button>
               </div>
             )}
+
           </div>
+          </>
         ) : (
           <>
             <Link href="/login" className={styles.link}>

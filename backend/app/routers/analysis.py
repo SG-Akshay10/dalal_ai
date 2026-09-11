@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from io import BytesIO
 import logging
 import hashlib
 import json
+import os
 import threading
 import time
 import csv
@@ -11,6 +14,7 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -215,3 +219,67 @@ def stock_history(symbol: str, exchange: str = "NSE", user: dict = Depends(get_c
         "source": snapshot["source"],
         "as_of": snapshot["as_of"],
     }
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = Field(default_factory=list)
+
+
+SARVAM_ENDPOINT = "https://api.sarvam.ai/v1/chat/completions"
+SARVAM_MODEL = "sarvam-105b"
+CHAT_SYSTEM_PROMPT = """You are dalal.ai's AI portfolio assistant, a helpful, careful Indian stock-market expert.
+You can discuss the user's holdings, sectors, diversification, and general market/finance education.
+Always be clear this is educational information, not investment advice, and never instruct the user to buy or sell a specific security.
+Keep answers concise, structured, and easy to read (use short paragraphs or bullet points where useful).
+If you don't have enough information (e.g. live prices), say so instead of guessing."""
+
+
+def _portfolio_context_block(user_id_value: str) -> str:
+    try:
+        holdings = DatabaseManager.get_holdings(user_id_value)
+    except Exception:
+        holdings = []
+    if not holdings:
+        return "The user currently has no saved holdings."
+    lines = [
+        f"- {holding.get('symbol')}: qty {holding.get('quantity')}, avg buy price {holding.get('buy_price')}, exchange {holding.get('exchange', 'NSE')}"
+        for holding in holdings
+    ]
+    return "The user's current holdings are:\n" + "\n".join(lines)
+
+
+@router.post("/analysis/chat")
+def analysis_chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
+    """Conversational AI endpoint grounded in the user's portfolio for the AI Analysis chatbot screen."""
+    api_key = os.getenv("SARVAM_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI chat is temporarily unavailable. Please retry.")
+
+    context_block = _portfolio_context_block(user_id(user))
+    messages = [{"role": "system", "content": f"{CHAT_SYSTEM_PROMPT}\n\n{context_block}"}]
+    for item in payload.history[-10:]:
+        if item.role in ("user", "assistant") and item.content.strip():
+            messages.append({"role": item.role, "content": item.content})
+    messages.append({"role": "user", "content": payload.message})
+
+    headers = {"api-subscription-key": api_key, "Content-Type": "application/json"}
+    body = {"model": SARVAM_MODEL, "messages": messages, "max_tokens": 700}
+
+    try:
+        response = httpx.post(SARVAM_ENDPOINT, headers=headers, json=body, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+        reply = data["choices"][0]["message"].get("content") or ""
+        if not reply.strip():
+            raise ValueError("Empty reply from Sarvam")
+    except Exception as exc:
+        logger.warning("AI chat failed: %s", exc)
+        raise HTTPException(status_code=503, detail="AI chat is temporarily unavailable. Please retry.") from exc
+
+    return {"reply": reply.strip()}
