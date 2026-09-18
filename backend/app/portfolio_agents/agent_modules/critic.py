@@ -14,6 +14,8 @@ class CriticAgent:
         issues = []
         if not state.sector_analysis or not state.risk_analysis:
             issues.append("Required sector or risk analysis is missing")
+        if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and state.risk_analysis and state.risk_analysis.applicable and any(len(item.narrative.split()) < 100 for item in state.risk_analysis.findings):
+            issues.append("An individual risk analysis narrative is shorter than 100 words")
         if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and any(len(item.narrative.split()) < 100 for item in (state.asset_analysis.findings if state.asset_analysis else [])):
             issues.append("An individual asset narrative is shorter than 100 words")
         if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and state.technical_analysis and any(len(item.narrative.split()) < 100 for item in state.technical_analysis.findings):

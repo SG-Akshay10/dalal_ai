@@ -167,14 +167,30 @@ class RiskFinding(BaseModel):
     ticker: str
     severity: Literal["Low", "Medium", "High"]
     drawdown_pct: float | None = None
+    volatility_pct: float | None = None
     stop_loss_reference: float | None = None
-    tax_loss_observation: str
-    commentary: str
+    tax_loss_observation: str = "A loss may warrant recordkeeping review; tax treatment depends on jurisdiction, holding period, and investor circumstances."
+    leverage_risk: str = ""
+    liquidity_risk: str = ""
+    valuation_risk: str = ""
+    earnings_risk: str = ""
+    sector_sensitivity: str = ""
+    downside_scenarios: list[str] = Field(default_factory=list)
+    evidence_backed_risks: list[str] = Field(default_factory=list)
+    hypothetical_risks: list[str] = Field(default_factory=list)
+    agent_disagreements: list[str] = Field(default_factory=list)
+    commentary: str = ""
+    narrative: str = ""
 
 
 class RiskAnalysis(BaseModel):
+    applicable: bool = True
+    reason_if_not_applicable: str = ""
     findings: list[RiskFinding] = Field(default_factory=list)
-    portfolio_risk_level: Literal["Low", "Medium", "High"]
+    portfolio_risk_level: Literal["Low", "Medium", "High"] = "Medium"
+    concentration_risk_summary: str = ""
+    macro_downside_scenarios: list[str] = Field(default_factory=list)
+    overall_risk_summary: str = ""
 
 
 class StockThesisFinding(BaseModel):
