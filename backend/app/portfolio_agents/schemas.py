@@ -52,6 +52,34 @@ class DataQuality(BaseModel):
     errors: list[str] = Field(default_factory=list)           # human-readable retrieval errors
 
 
+class FinancialPeriod(BaseModel):
+    period: str  # e.g., "FY2023", "FY2024", "TTM"
+    revenue: float | None = None
+    net_income: float | None = None
+    operating_margin_pct: float | None = None
+    net_margin_pct: float | None = None
+    eps: float | None = None
+
+
+class FundamentalMetrics(BaseModel):
+    pe_ratio: float | None = None
+    pb_ratio: float | None = None
+    de_ratio: float | None = None
+    roe_pct: float | None = None
+    roce_pct: float | None = None
+    gross_margin_pct: float | None = None
+    operating_margin_pct: float | None = None
+    net_margin_pct: float | None = None
+    revenue_growth_pct: float | None = None
+    earnings_growth_pct: float | None = None
+    free_cash_flow: float | None = None
+    operating_cash_flow: float | None = None
+    interest_coverage: float | None = None
+    historical_periods: list[FinancialPeriod] = Field(default_factory=list)
+    benchmark_pe: float | None = None
+    benchmark_roe_pct: float | None = None
+
+
 class EnrichedHolding(BaseModel):
     ticker: str
     sector: str = "Unknown"
@@ -61,6 +89,7 @@ class EnrichedHolding(BaseModel):
     market_value: float | None = None
     pnl_pct: float | None = None
     technicals: Technicals = Field(default_factory=Technicals)
+    fundamentals: FundamentalMetrics = Field(default_factory=FundamentalMetrics)
     data_errors: list[str] = Field(default_factory=list)
     data_quality: DataQuality = Field(default_factory=DataQuality)
 
@@ -139,6 +168,28 @@ class SectorThesis(BaseModel):
     findings: list[SectorThesisFinding] = Field(default_factory=list)
 
 
+class FundamentalFinding(BaseModel):
+    ticker: str
+    sector: str
+    health_score: float = Field(ge=0, le=100)
+    key_metrics: dict[str, float | str | None] = Field(default_factory=dict)
+    positive_developments: list[str] = Field(default_factory=list)
+    deteriorating_metrics: list[str] = Field(default_factory=list)
+    financial_weaknesses: list[str] = Field(default_factory=list)
+    insufficient_data_areas: list[str] = Field(default_factory=list)
+    historical_trend_analysis: str = ""
+    benchmark_comparison: str = ""
+    narrative: str = ""
+
+
+class FundamentalAnalysis(BaseModel):
+    applicable: bool
+    reason_if_not_applicable: str = ""
+    findings: list[FundamentalFinding] = Field(default_factory=list)
+    portfolio_fundamental_health: Literal["Strong", "Moderate", "Weak", "Mixed"] = "Moderate"
+    overall_summary: str = ""
+
+
 class CriticResult(BaseModel):
     passed: bool
     issues: list[str] = Field(default_factory=list)
@@ -167,6 +218,7 @@ class ExecutiveReport(BaseModel):
     risk_commentary: str
     stock_thesis_commentary: str = ""
     sector_thesis_commentary: str = ""
+    fundamental_commentary: str = ""
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
 
@@ -179,6 +231,7 @@ class PortfolioState(BaseModel):
     risk_analysis: RiskAnalysis | None = None
     stock_thesis: StockThesis | None = None
     sector_thesis: SectorThesis | None = None
+    fundamental_analysis: FundamentalAnalysis | None = None
     critic: CriticResult | None = None
     report: ExecutiveReport | None = None
     retry_count: int = 0

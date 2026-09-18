@@ -55,6 +55,7 @@ class SynthesisAgent:
             "risk_analysis": state.risk_analysis.model_dump() if state.risk_analysis else None,
             "stock_thesis": state.stock_thesis.model_dump() if state.stock_thesis else None,
             "sector_thesis": state.sector_thesis.model_dump() if state.sector_thesis else None,
+            "fundamental_analysis": state.fundamental_analysis.model_dump() if state.fundamental_analysis else None,
             "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7],
             "data_errors": [error for item in state.enriched_holdings for error in item.data_errors],
         }
@@ -69,7 +70,8 @@ class SynthesisAgent:
         else: risk_text = "Risk diagnostics were unavailable."
         stock_text = "\n".join(f"{item.ticker} ({item.sector}) — Pros: {'; '.join(item.pros) or 'none identified'}. Cons: {'; '.join(item.cons) or 'none identified'}." for item in state.stock_thesis.findings) if state.stock_thesis and state.stock_thesis.applicable and state.stock_thesis.findings else (state.stock_thesis.reason_if_not_applicable if state.stock_thesis and not state.stock_thesis.applicable else "Individual stock thesis analysis was unavailable.")
         sector_thesis_text = "\n\n".join(f"{item.sector} — Growth drivers: {'; '.join(item.growth_drivers) or 'none identified'}. Headwinds: {'; '.join(item.headwinds) or 'none identified'}. Policy/geopolitical factors: {'; '.join(item.policy_geopolitical_factors) or 'none identified'}. Pros: {'; '.join(item.pros) or 'none identified'}. Cons: {'; '.join(item.cons) or 'none identified'}. {item.narrative}" for item in state.sector_thesis.findings) if state.sector_thesis and state.sector_thesis.findings else "Sector thesis analysis was unavailable."
-        return {"report": ExecutiveReport(headline="Portfolio executive analysis", executive_summary=narrative, sector_commentary=sector_text, asset_commentary=asset_text, risk_commentary=risk_text, stock_thesis_commentary=stock_text, sector_thesis_commentary=sector_thesis_text, recommendations=["Review concentration and position-size limits against personal goals.", "Monitor material changes in sector exposure, volatility, and drawdown."], disclaimer="Educational analysis only; not investment advice.")}
+        fundamental_text = state.fundamental_analysis.overall_summary + "\n" + "\n".join(f"{item.ticker}: {item.narrative}" for item in state.fundamental_analysis.findings) if state.fundamental_analysis and state.fundamental_analysis.applicable and state.fundamental_analysis.findings else (state.fundamental_analysis.reason_if_not_applicable if state.fundamental_analysis and not state.fundamental_analysis.applicable else "Fundamental analysis was unavailable.")
+        return {"report": ExecutiveReport(headline="Portfolio executive analysis", executive_summary=narrative, sector_commentary=sector_text, asset_commentary=asset_text, risk_commentary=risk_text, stock_thesis_commentary=stock_text, sector_thesis_commentary=sector_thesis_text, fundamental_commentary=fundamental_text, recommendations=["Review concentration and position-size limits against personal goals.", "Monitor material changes in sector exposure, volatility, and drawdown."], disclaimer="Educational analysis only; not investment advice.")}
 
 
 agent = SynthesisAgent()

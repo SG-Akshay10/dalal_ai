@@ -39,6 +39,10 @@ def _sector_thesis(state):
     return run("sector_thesis", _model(state))
 
 
+def _fundamental(state):
+    return run("fundamental", _model(state))
+
+
 def _critic(state):
     return run("critic", _model(state))
 
@@ -47,7 +51,14 @@ def _retry(state):
     model = _model(state)
     feedback = "; ".join(model.critic.issues if model.critic else [])
     # Re-run every independent analyst once with the critic feedback before rechecking.
-    updated = {**run("sector", model, feedback), **run("asset", model, feedback), **run("risk", model, feedback), **run("stock_thesis", model, feedback), **run("sector_thesis", model, feedback)}
+    updated = {
+        **run("sector", model, feedback),
+        **run("asset", model, feedback),
+        **run("risk", model, feedback),
+        **run("stock_thesis", model, feedback),
+        **run("sector_thesis", model, feedback),
+        **run("fundamental", model, feedback),
+    }
     return {**updated, "retry_count": model.retry_count + 1}
 
 
@@ -70,6 +81,7 @@ def build_portfolio_graph():
     graph.add_node("risk", _risk)
     graph.add_node("stock_thesis", _stock_thesis)
     graph.add_node("sector_thesis", _sector_thesis)
+    graph.add_node("fundamental", _fundamental)
     graph.add_node("critic", _critic)
     graph.add_node("retry", _retry)
     graph.add_node("synthesize", _synthesize)
@@ -79,7 +91,8 @@ def build_portfolio_graph():
     graph.add_edge("ingestion", "risk")
     graph.add_edge("ingestion", "stock_thesis")
     graph.add_edge("ingestion", "sector_thesis")
-    graph.add_edge(["sector", "asset", "risk", "stock_thesis", "sector_thesis"], "critic")
+    graph.add_edge("ingestion", "fundamental")
+    graph.add_edge(["sector", "asset", "risk", "stock_thesis", "sector_thesis", "fundamental"], "critic")
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
     graph.add_edge("synthesize", END)

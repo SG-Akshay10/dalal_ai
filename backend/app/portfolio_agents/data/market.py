@@ -8,7 +8,8 @@ from typing import Any
 from app.services.market_data import market_snapshot
 from app.services.portfolio_risk import SYMBOL_SECTORS
 from app.services.sector_lookup import fetch_sector
-from ..schemas import EnrichedHolding, HoldingInput, Technicals
+from ..schemas import EnrichedHolding, FundamentalMetrics, HoldingInput, Technicals
+from .fundamental import get_sector_benchmark
 from .quality import holding_quality, market_data_is_fresh
 
 
@@ -43,6 +44,7 @@ def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, An
 def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     ticker, errors = (holding.ticker or holding.symbol or "").upper(), []
     price, history, indicators, source, as_of = holding.current_price, list(holding.historical_prices), {}, "client-supplied", holding.market_data_as_of
+    pe_ratio, de_ratio = None, None
     if history and market_data_is_fresh(as_of):
         latest = history[-1]
         indicators = {"rsi14": latest.get("rsi14"), "macd_histogram": latest.get("macd_histogram"), "sma_crossover": "bullish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) > float(latest["sma200"]) else "bearish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) < float(latest["sma200"]) else "neutral"}
@@ -51,9 +53,24 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
         try:
             snapshot = market_snapshot(ticker, holding.exchange)
             price, history, indicators, as_of = snapshot.get("price") or price, snapshot.get("history", []), snapshot.get("indicators", {}), snapshot.get("as_of")
+            pe_ratio, de_ratio = _finite(snapshot.get("pe_ratio")), _finite(snapshot.get("de_ratio"))
         except Exception as exc:
             errors.append(f"Market data unavailable: {exc}")
     missing = (["current_price"] if price is None else []) + (["historical_prices"] if len(history) < 2 else [])
     if price is None: errors.append("Current price unavailable")
     pnl = ((price - holding.buy_price) / holding.buy_price * 100) if price is not None and holding.buy_price else None
-    return EnrichedHolding(ticker=ticker, sector=resolve_sector(ticker, holding.sector, holding.exchange), quantity=holding.quantity, buy_price=holding.buy_price, current_price=price, market_value=price * holding.quantity if price is not None else None, pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators), data_errors=errors, data_quality=holding_quality(source=source, as_of=as_of, errors=errors, missing_fields=missing))
+    sector = resolve_sector(ticker, holding.sector, holding.exchange)
+    bm = get_sector_benchmark(sector)
+    fundamentals = FundamentalMetrics(
+        pe_ratio=pe_ratio,
+        de_ratio=de_ratio,
+        benchmark_pe=bm.get("pe_ratio"),
+        benchmark_roe_pct=bm.get("roe_pct"),
+    )
+    return EnrichedHolding(
+        ticker=ticker, sector=sector, quantity=holding.quantity, buy_price=holding.buy_price,
+        current_price=price, market_value=price * holding.quantity if price is not None else None,
+        pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators),
+        fundamentals=fundamentals, data_errors=errors,
+        data_quality=holding_quality(source=source, as_of=as_of, errors=errors, missing_fields=missing)
+    )

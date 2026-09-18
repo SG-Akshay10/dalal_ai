@@ -10,14 +10,18 @@ from app.portfolio_agents.schemas import (
     DataQuality,
     EnrichedHolding,
     EvidenceRecord,
+    FinancialPeriod,
+    FundamentalMetrics,
     HoldingInput,
     PortfolioState,
     Technicals,
 )
 from app.portfolio_agents.data import (
+    calculate_fundamental_health,
     calculate_technicals,
     diversification_score,
     enrich_holding,
+    extract_fundamental_finding,
     holding_quality,
     market_data_is_fresh,
 )
@@ -37,6 +41,20 @@ def fake_enrich(holding):
         technicals=Technicals(
             rsi14=55, sma50=98, sma200=90, macd_histogram=1.2,
             crossover="bullish", support=90, resistance=110, max_drawdown_pct=-12,
+        ),
+        fundamentals=FundamentalMetrics(
+            pe_ratio=24.5,
+            roe_pct=18.5,
+            de_ratio=0.2,
+            operating_margin_pct=16.0,
+            revenue_growth_pct=12.0,
+            free_cash_flow=5000000.0,
+            historical_periods=[
+                FinancialPeriod(period="FY2023", revenue=10000000, net_margin_pct=14.0),
+                FinancialPeriod(period="FY2024", revenue=11200000, net_margin_pct=15.5),
+            ],
+            benchmark_pe=26.0,
+            benchmark_roe_pct=22.0,
         ),
         data_quality=DataQuality(
             source="client-supplied", as_of=datetime.now(timezone.utc).isoformat(),
@@ -58,6 +76,19 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertEqual(technicals.crossover, "bullish")
         self.assertIsNotNone(technicals.support)
         self.assertLess(diversification_score({"Tech": 100}, 100), 1)
+
+    # ------------------------------------------------------------------
+    # Fundamental calculations
+    # ------------------------------------------------------------------
+
+    def test_fundamental_health_and_finding_calculation(self):
+        """extract_fundamental_finding correctly scores and categorizes fundamentals."""
+        holding = fake_enrich(HoldingInput(symbol="INFY", quantity=10, buy_price=100))
+        finding = extract_fundamental_finding(holding)
+        self.assertGreaterEqual(finding.health_score, 70.0)
+        self.assertEqual(finding.ticker, "INFY")
+        self.assertTrue(any("12.0%" in item for item in finding.positive_developments))
+        self.assertIn("FY2023", finding.historical_trend_analysis)
 
     # ------------------------------------------------------------------
     # Data-quality metadata
@@ -156,6 +187,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertGreaterEqual(len(state.asset_analysis.findings[0].narrative.split()), 100)
         self.assertTrue(state.stock_thesis.applicable)
         self.assertTrue(state.sector_thesis.findings)
+        self.assertIsNotNone(state.fundamental_analysis)
+        self.assertTrue(state.fundamental_analysis.applicable)
+        self.assertTrue(len(state.fundamental_analysis.findings) > 0)
+        self.assertIn("INFY", state.report.fundamental_commentary)
 
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
            side_effect=fake_text_completion)
@@ -169,6 +204,7 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertFalse(state.asset_analysis.detailed_mode)
         self.assertEqual(state.asset_analysis.findings, [])
         self.assertFalse(state.stock_thesis.applicable)
+        self.assertFalse(state.fundamental_analysis.applicable)
         self.assertTrue(state.sector_thesis.findings)
 
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",

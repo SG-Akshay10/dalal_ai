@@ -4,10 +4,17 @@ All agents should import from this package rather than from ``tools`` or
 individual sub-modules.  This is the single stable surface for:
 
 - Market-data enrichment and technical-indicator computation (``market``)
+- Fundamental metrics processing and evaluation (``fundamental``)
 - Portfolio-level deterministic calculations (``portfolio``)
 - Data-freshness and completeness metadata (``quality``)
 """
 
+from .fundamental import (
+    SECTOR_BENCHMARKS,
+    calculate_fundamental_health,
+    extract_fundamental_finding,
+    get_sector_benchmark,
+)
 from .market import (
     calculate_technicals,
     enrich_holding,
@@ -25,6 +32,11 @@ from .quality import (
 )
 
 __all__ = [
+    # fundamental calculations
+    "SECTOR_BENCHMARKS",
+    "calculate_fundamental_health",
+    "extract_fundamental_finding",
+    "get_sector_benchmark",
     # market enrichment
     "calculate_technicals",
     "enrich_holding",
