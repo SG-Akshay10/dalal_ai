@@ -81,6 +81,10 @@ def _synthesize(state):
     return run("synthesize", _model(state))
 
 
+def _scenario(state):
+    return run("scenario_analysis", _model(state))
+
+
 def _route_after_critic(state):
     model = _model(state)
     if model.critic and model.critic.passed:
@@ -103,6 +107,7 @@ def build_portfolio_graph():
     graph.add_node("critic", _critic)
     graph.add_node("retry", _retry)
     graph.add_node("synthesize", _synthesize)
+    graph.add_node("scenario_analysis", _scenario)
     graph.add_edge(START, "ingestion")
     graph.add_edge("ingestion", "sector")
     graph.add_edge("ingestion", "asset")
@@ -116,7 +121,8 @@ def build_portfolio_graph():
     graph.add_edge(["sector", "asset", "technical", "risk", "stock_thesis", "sector_thesis", "fundamental", "valuation", "market_context"], "critic")
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
-    graph.add_edge("synthesize", END)
+    graph.add_edge("synthesize", "scenario_analysis")
+    graph.add_edge("scenario_analysis", END)
     return graph.compile()
 
 

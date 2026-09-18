@@ -43,6 +43,9 @@ from .quality import (
 from .risk import (
     extract_risk_finding,
 )
+from .scenario import (
+    build_scenario_analysis,
+)
 from .valuation import (
     SECTOR_VALUATION_BENCHMARKS,
     calculate_growth_adjusted_valuation,
@@ -52,6 +55,8 @@ from .valuation import (
 )
 
 __all__ = [
+    # scenario analysis
+    "build_scenario_analysis",
     # critic rules
     "evaluate_critic_rules",
     # fundamental calculations

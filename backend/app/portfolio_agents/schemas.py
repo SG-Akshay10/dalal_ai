@@ -378,6 +378,60 @@ class ExecutiveSynthesis(BaseModel):
     key_conviction_drivers: list[str] = Field(default_factory=list)
 
 
+class ScenarioCondition(BaseModel):
+    """A single condition that supports or invalidates a scenario case.
+
+    ``observed`` conditions are derived from current price or financial data
+    already present in the analytical pipeline.  ``assumption`` conditions are
+    forward-looking inferences that have not yet been confirmed by data.
+    """
+    description: str
+    dimension: str  # e.g. "Technical", "Fundamental", "Valuation", "Market Context", "Risk"
+    is_observed: bool = True  # True = derived from current data; False = assumption about future
+
+
+class ScenarioCase(BaseModel):
+    """One branch of the three-scenario framework: Positive, Base, or Negative."""
+    label: Literal["Positive", "Base", "Negative"]
+    # Qualitative likelihood label — never a spurious numeric probability
+    probability_label: Literal["More Likely", "Likely", "Less Likely", "Uncertain"]
+    thesis_summary: str
+    # Conditions that must hold (or are currently observed) to make this scenario valid
+    observed_conditions: list[ScenarioCondition] = Field(default_factory=list)
+    # Forward-looking assumptions not yet confirmed by data
+    assumptions: list[ScenarioCondition] = Field(default_factory=list)
+    # Specific metric or event changes that would strengthen the current thesis
+    thesis_strengthening_changes: list[str] = Field(default_factory=list)
+    # Specific metric or event changes that would weaken or invalidate the current thesis
+    thesis_weakening_changes: list[str] = Field(default_factory=list)
+    supporting_evidence_keys: list[str] = Field(default_factory=list)
+
+
+class ScenarioFinding(BaseModel):
+    """Per-holding scenario analysis output."""
+    ticker: str
+    sector: str
+    positive_case: ScenarioCase
+    base_case: ScenarioCase
+    negative_case: ScenarioCase
+    # Key metric thresholds or events that would shift the scenario from Base to Positive or Negative
+    inflection_points: list[str] = Field(default_factory=list)
+    current_scenario_assessment: Literal["Leaning Positive", "Base", "Leaning Negative", "Highly Uncertain"] = "Base"
+    # Plain-language explanation of which observed vs. assumed conditions drive the current assessment
+    current_vs_assumed_breakdown: str = ""
+
+
+class ScenarioAnalysis(BaseModel):
+    """Portfolio-level scenario analysis container."""
+    applicable: bool = True
+    reason_if_not_applicable: str = ""
+    findings: list[ScenarioFinding] = Field(default_factory=list)
+    # Cross-portfolio scenario summary: what portfolio-wide conditions shift the overall picture
+    portfolio_scenario_summary: str = ""
+    # Conditions whose change would most materially affect the largest share of holdings
+    portfolio_level_inflection_points: list[str] = Field(default_factory=list)
+
+
 class ExecutiveReport(BaseModel):
     headline: str
     executive_summary: str
@@ -389,6 +443,7 @@ class ExecutiveReport(BaseModel):
     fundamental_commentary: str = ""
     valuation_commentary: str = ""
     market_context_commentary: str = ""
+    scenario_commentary: str = ""
     synthesis: ExecutiveSynthesis = Field(default_factory=ExecutiveSynthesis)
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
@@ -406,6 +461,7 @@ class PortfolioState(BaseModel):
     fundamental_analysis: FundamentalAnalysis | None = None
     valuation_analysis: ValuationAnalysis | None = None
     market_context_analysis: MarketContextAnalysis | None = None
+    scenario_analysis: ScenarioAnalysis | None = None
     critic: CriticResult | None = None
     report: ExecutiveReport | None = None
     retry_count: int = 0
