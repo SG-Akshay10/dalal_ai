@@ -322,6 +322,12 @@ class MarketContextAnalysis(BaseModel):
 class CriticResult(BaseModel):
     passed: bool
     issues: list[str] = Field(default_factory=list)
+    unsupported_claims: list[str] = Field(default_factory=list)
+    contradictory_findings: list[str] = Field(default_factory=list)
+    calculation_issues: list[str] = Field(default_factory=list)
+    excessive_confidence: list[str] = Field(default_factory=list)
+    reasoning_errors: list[str] = Field(default_factory=list)
+    overlooked_risks: list[str] = Field(default_factory=list)
 
 
 class EvidenceRecord(BaseModel):

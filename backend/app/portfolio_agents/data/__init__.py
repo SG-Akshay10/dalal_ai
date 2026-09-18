@@ -9,6 +9,9 @@ individual sub-modules.  This is the single stable surface for:
 - Data-freshness and completeness metadata (``quality``)
 """
 
+from .critic import (
+    evaluate_critic_rules,
+)
 from .fundamental import (
     SECTOR_BENCHMARKS,
     calculate_fundamental_health,
@@ -49,6 +52,8 @@ from .valuation import (
 )
 
 __all__ = [
+    # critic rules
+    "evaluate_critic_rules",
     # fundamental calculations
     "SECTOR_BENCHMARKS",
     "calculate_fundamental_health",
