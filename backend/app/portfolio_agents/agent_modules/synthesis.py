@@ -27,7 +27,37 @@ class SynthesisAgent:
 
     def run(self, state: PortfolioState, correction: str | None = None) -> AgentResult:
         detailed = len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT
-        payload = {"portfolio_size": len(state.enriched_holdings), "holdings": [item.model_dump() for item in state.enriched_holdings] if detailed else [], "sector_analysis": state.sector_analysis.model_dump() if state.sector_analysis else None, "asset_analysis": state.asset_analysis.model_dump() if detailed and state.asset_analysis else None, "risk_analysis": state.risk_analysis.model_dump() if state.risk_analysis else None, "stock_thesis": state.stock_thesis.model_dump() if state.stock_thesis else None, "sector_thesis": state.sector_thesis.model_dump() if state.sector_thesis else None, "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7], "data_errors": [error for item in state.enriched_holdings for error in item.data_errors]}
+        # Build a scoped holding summary: the LLM only needs identifiers,
+        # position-level performance, and data-quality status to write the
+        # executive narrative.  Raw technical arrays are already processed by
+        # the deterministic agents (sector, asset, risk) so re-sending them
+        # would only invite redundant re-interpretation.
+        holding_summaries = [
+            {
+                "ticker": item.ticker,
+                "sector": item.sector,
+                "market_value": item.market_value,
+                "pnl_pct": item.pnl_pct,
+                "data_quality": {
+                    "fresh": item.data_quality.fresh,
+                    "complete": item.data_quality.complete,
+                    "source": item.data_quality.source,
+                    "missing_fields": item.data_quality.missing_fields,
+                },
+            }
+            for item in state.enriched_holdings
+        ] if detailed else []
+        payload = {
+            "portfolio_size": len(state.enriched_holdings),
+            "holdings": holding_summaries,
+            "sector_analysis": state.sector_analysis.model_dump() if state.sector_analysis else None,
+            "asset_analysis": state.asset_analysis.model_dump() if detailed and state.asset_analysis else None,
+            "risk_analysis": state.risk_analysis.model_dump() if state.risk_analysis else None,
+            "stock_thesis": state.stock_thesis.model_dump() if state.stock_thesis else None,
+            "sector_thesis": state.sector_thesis.model_dump() if state.sector_thesis else None,
+            "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7],
+            "data_errors": [error for item in state.enriched_holdings for error in item.data_errors],
+        }
         narrative = text_completion(self.prompt, payload, max_tokens=2600)
         if self._is_prompt_echo(narrative): narrative = self._safe_summary(state)
         sector_text = "; ".join(f"{item.sector}: {item.allocation_pct:.1f}% ({item.risk_level.lower()} risk)" for item in state.sector_analysis.findings) + f". {state.sector_analysis.macro_commentary}" if state.sector_analysis else "Sector analysis was unavailable."

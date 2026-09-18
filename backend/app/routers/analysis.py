@@ -23,7 +23,7 @@ from app.database import DatabaseManager
 from app.services.market_data import market_quote, market_snapshot
 from app.services.sector_lookup import fetch_sector
 from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
-from app.portfolio_agents.tools import market_data_is_fresh
+from app.portfolio_agents.data import market_data_is_fresh
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 logger = logging.getLogger(__name__)

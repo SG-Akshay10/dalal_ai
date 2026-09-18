@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .base import AgentResult
 from ..schemas import PortfolioState
-from ..tools import enrich_holding
+from ..data import enrich_holding
 
 
 class IngestionAgent:

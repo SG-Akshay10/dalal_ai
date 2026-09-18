@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .base import AgentResult
 from ..schemas import PortfolioState, SectorAnalysis, SectorFinding
-from ..tools import allocation, diversification_score, missing_sectors
+from ..data import allocation, diversification_score, missing_sectors
 
 
 class SectorAgent:

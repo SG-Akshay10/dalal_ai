@@ -37,6 +37,21 @@ class Technicals(BaseModel):
     max_drawdown_pct: float | None = None
 
 
+class DataQuality(BaseModel):
+    """Freshness, completeness, and provenance metadata for a single enriched holding.
+
+    Every enriched holding carries one of these records so agents and the
+    executive report can surface data quality without performing any additional
+    computation.
+    """
+    source: str = "unknown"
+    as_of: str | None = None          # ISO-8601 UTC timestamp of the snapshot
+    fresh: bool = False               # True when data is ≤ MARKET_DATA_MAX_AGE_SECONDS old
+    complete: bool = False            # True when no errors and no missing_fields
+    missing_fields: list[str] = Field(default_factory=list)   # e.g. ["current_price", "historical_prices"]
+    errors: list[str] = Field(default_factory=list)           # human-readable retrieval errors
+
+
 class EnrichedHolding(BaseModel):
     ticker: str
     sector: str = "Unknown"
@@ -47,6 +62,7 @@ class EnrichedHolding(BaseModel):
     pnl_pct: float | None = None
     technicals: Technicals = Field(default_factory=Technicals)
     data_errors: list[str] = Field(default_factory=list)
+    data_quality: DataQuality = Field(default_factory=DataQuality)
 
 
 class SectorFinding(BaseModel):

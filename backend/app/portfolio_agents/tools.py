@@ -1,104 +1,38 @@
+"""Backward-compatibility shim — all symbols now live in ``portfolio_agents.data``.
+
+.. deprecated::
+    Import directly from ``app.portfolio_agents.data`` instead.
+
+    This file will be removed in a future cleanup once all internal callers
+    have been updated.  It exists only to avoid breaking any external code or
+    scripts that were written against the old ``tools`` import path.
+"""
+
 from __future__ import annotations
 
-import math
-from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any
+# Re-export the full public surface of the data package so that any existing
+# import of the form ``from app.portfolio_agents.tools import X`` continues to
+# work without modification.
+from .data import (  # noqa: F401  (re-exports are intentional)
+    MARKET_DATA_MAX_AGE_SECONDS,
+    allocation,
+    calculate_technicals,
+    diversification_score,
+    enrich_holding,
+    holding_quality,
+    market_data_is_fresh,
+    missing_sectors,
+    resolve_sector,
+)
 
-from app.services.market_data import market_snapshot
-from app.services.portfolio_risk import DEFAULT_SECTORS, SYMBOL_SECTORS
-from app.services.sector_lookup import fetch_sector
-from .schemas import EnrichedHolding, HoldingInput, Technicals
-
-MARKET_DATA_MAX_AGE_SECONDS = 10 * 60
-
-
-def resolve_sector(ticker: str, provided_sector: str | None, exchange: str = "NSE") -> str:
-    """Resolve sector preferring an explicit value, then Yahoo Finance, then the static fallback map."""
-    if provided_sector:
-        return provided_sector
-    sector = fetch_sector(ticker, exchange)
-    if sector and sector != "Unknown":
-        return sector
-    return SYMBOL_SECTORS.get(ticker, "Unknown")
-
-
-def _finite(value: Any) -> float | None:
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (TypeError, ValueError):
-        return None
-
-
-def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, Any]) -> Technicals:
-    closes = [float(row["close"]) for row in history if _finite(row.get("close"))]
-    if len(closes) < 2:
-        return Technicals(rsi14=indicators.get("rsi14"), macd_histogram=indicators.get("macd_histogram"), crossover=indicators.get("sma_crossover", "unavailable"))
-    returns = [closes[i] / closes[i - 1] - 1 for i in range(1, len(closes))]
-    volatility = math.sqrt(sum((item - sum(returns) / len(returns)) ** 2 for item in returns) / max(1, len(returns) - 1)) * math.sqrt(252) * 100
-    peak = closes[0]
-    drawdown = min((price / max(peak := max(peak, price), 0.000001) - 1) * 100 for price in closes)
-    recent = closes[-60:] if len(closes) >= 60 else closes
-    return Technicals(rsi14=indicators.get("rsi14"), sma50=history[-1].get("sma50"), sma200=history[-1].get("sma200"), macd_histogram=indicators.get("macd_histogram"), crossover=indicators.get("sma_crossover", "unavailable"), annualized_volatility_pct=round(volatility, 2), support=round(min(recent), 2), resistance=round(max(recent), 2), max_drawdown_pct=round(drawdown, 2))
-
-
-def market_data_is_fresh(as_of: str | None) -> bool:
-    if not as_of:
-        return False
-    try:
-        timestamp = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
-        if timestamp.tzinfo is None:
-            return False
-        age = (datetime.now(timezone.utc) - timestamp.astimezone(timezone.utc)).total_seconds()
-        return 0 <= age <= MARKET_DATA_MAX_AGE_SECONDS
-    except (TypeError, ValueError):
-        return False
-
-
-def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
-    ticker = (holding.ticker or holding.symbol or "").upper()
-    errors: list[str] = []
-    price, history, indicators = holding.current_price, list(holding.historical_prices), {}
-    if history and market_data_is_fresh(holding.market_data_as_of):
-        latest = history[-1]
-        indicators = {
-            "rsi14": latest.get("rsi14"),
-            "macd_histogram": latest.get("macd_histogram"),
-            "sma_crossover": (
-                "bullish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) > float(latest["sma200"])
-                else "bearish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) < float(latest["sma200"])
-                else "neutral"
-            ),
-        }
-    else:
-        try:
-            snapshot = market_snapshot(ticker, holding.exchange)
-            price = snapshot.get("price") or price
-            history, indicators = snapshot.get("history", []), snapshot.get("indicators", {})
-        except Exception as exc:
-            errors.append(f"Market data unavailable: {exc}")
-    if price is None:
-        errors.append("Current price unavailable")
-    pnl = ((price - holding.buy_price) / holding.buy_price * 100) if price is not None and holding.buy_price else None
-    return EnrichedHolding(ticker=ticker, sector=resolve_sector(ticker, holding.sector, holding.exchange), quantity=holding.quantity, buy_price=holding.buy_price, current_price=price, market_value=price * holding.quantity if price is not None else None, pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators), data_errors=errors)
-
-
-def allocation(holdings: list[EnrichedHolding]) -> tuple[dict[str, float], float]:
-    values: dict[str, float] = defaultdict(float)
-    for holding in holdings:
-        if holding.market_value is not None:
-            values[holding.sector] += holding.market_value
-    total = sum(values.values())
-    return dict(values), total
-
-
-def diversification_score(values: dict[str, float], total: float) -> float:
-    if not total:
-        return 0
-    hhi = sum((value / total) ** 2 for value in values.values())
-    return round(max(0, min(100, (1 - hhi) * 125)), 1)
-
-
-def missing_sectors(values: dict[str, float], total: float) -> list[str]:
-    return [sector for sector in DEFAULT_SECTORS if not total or values.get(sector, 0) / total * 100 < 5]
+__all__ = [
+    "MARKET_DATA_MAX_AGE_SECONDS",
+    "allocation",
+    "calculate_technicals",
+    "diversification_score",
+    "enrich_holding",
+    "holding_quality",
+    "market_data_is_fresh",
+    "missing_sectors",
+    "resolve_sector",
+]
