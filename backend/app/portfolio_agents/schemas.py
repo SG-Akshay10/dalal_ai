@@ -27,14 +27,29 @@ class HoldingInput(BaseModel):
 
 class Technicals(BaseModel):
     rsi14: float | None = None
+    sma20: float | None = None
     sma50: float | None = None
     sma200: float | None = None
+    ema12: float | None = None
+    ema26: float | None = None
+    macd_line: float | None = None
+    macd_signal: float | None = None
     macd_histogram: float | None = None
     crossover: Literal["bullish", "bearish", "neutral", "unavailable"] = "unavailable"
+    bollinger_upper: float | None = None
+    bollinger_lower: float | None = None
+    bollinger_bandwidth_pct: float | None = None
+    bollinger_squeeze: bool = False
     annualized_volatility_pct: float | None = None
+    momentum_14d_pct: float | None = None
+    avg_volume_20d: float | None = None
+    latest_volume: float | None = None
+    volume_ratio: float | None = None
+    volume_surge: bool = False
     support: float | None = None
     resistance: float | None = None
     max_drawdown_pct: float | None = None
+    historical_bars_count: int = 0
 
 
 class DataQuality(BaseModel):
@@ -122,6 +137,24 @@ class AssetFinding(BaseModel):
 class AssetAnalysis(BaseModel):
     detailed_mode: bool
     findings: list[AssetFinding] = Field(default_factory=list)
+
+
+class TechnicalFinding(BaseModel):
+    ticker: str
+    trend: Literal["Bullish", "Bearish", "Neutral", "Consolidating"]
+    momentum: Literal["Strong Positive", "Weak Positive", "Neutral", "Weak Negative", "Strong Negative"]
+    volatility_assessment: str
+    volume_assessment: str
+    support: float | None = None
+    resistance: float | None = None
+    detected_patterns: list[str] = Field(default_factory=list)
+    narrative: str = ""
+
+
+class TechnicalAnalysis(BaseModel):
+    detailed_mode: bool
+    findings: list[TechnicalFinding] = Field(default_factory=list)
+    summary: str = ""
 
 
 class RiskFinding(BaseModel):
@@ -228,6 +261,7 @@ class PortfolioState(BaseModel):
     enriched_holdings: list[EnrichedHolding] = Field(default_factory=list)
     sector_analysis: SectorAnalysis | None = None
     asset_analysis: AssetAnalysis | None = None
+    technical_analysis: TechnicalAnalysis | None = None
     risk_analysis: RiskAnalysis | None = None
     stock_thesis: StockThesis | None = None
     sector_thesis: SectorThesis | None = None

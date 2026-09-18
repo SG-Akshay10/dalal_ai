@@ -250,11 +250,16 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                          "low": min(low, open_price, close), "close": close,
                          "volume": _finite((quote.get("volume") or [])[index]) or 0})
         closes = [row["close"] for row in rows]
+        volumes = [row["volume"] for row in rows]
+        sma20 = _sma(closes, 20)
         sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
+        ema12, ema26 = _ema(closes, 12), _ema(closes, 26)
         rsi = _rsi(closes)
         macd, macd_signal, macd_histogram = _macd(closes)
         for index, row in enumerate(rows):
+            row["sma20"] = sma20[index]
             row["sma50"], row["sma200"] = sma50[index], sma200[index]
+            row["ema12"], row["ema26"] = ema12[index], ema26[index]
             row["rsi14"] = rsi[index]
             row["macd"] = macd[index]
             row["macd_signal"] = macd_signal[index]
@@ -263,9 +268,13 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
             if len(window) == 20:
                 mean = sum(window) / 20
                 deviation = math.sqrt(sum((value - mean) ** 2 for value in window) / 20)
-                row["bollinger_upper"], row["bollinger_lower"] = mean + 2 * deviation, mean - 2 * deviation
+                upper, lower = mean + 2 * deviation, mean - 2 * deviation
+                row["bollinger_upper"], row["bollinger_lower"] = upper, lower
+                row["bollinger_bandwidth_pct"] = ((upper - lower) / mean * 100) if mean else None
             else:
-                row["bollinger_upper"] = row["bollinger_lower"] = None
+                row["bollinger_upper"] = row["bollinger_lower"] = row["bollinger_bandwidth_pct"] = None
+            vol_window = volumes[max(0, index - 19): index + 1]
+            row["avg_volume_20d"] = sum(vol_window) / len(vol_window) if vol_window else row["volume"]
         price = _finite(meta.get("regularMarketPrice")) or (rows[-1]["close"] if rows else None)
         previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
         latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
@@ -275,7 +284,10 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
                 "volume": rows[-1]["volume"] if rows else None, "currency": meta.get("currency", "INR"),
                 "history": rows,
-                "indicators": {"rsi14": _latest(rsi), "macd": _latest(macd), "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram), "sma_crossover": crossover},
+                "indicators": {"sma20": _latest(sma20), "sma50": latest_sma50, "sma200": latest_sma200,
+                               "ema12": _latest(ema12), "ema26": _latest(ema26),
+                               "rsi14": _latest(rsi), "macd": _latest(macd), "macd_signal": _latest(macd_signal),
+                               "macd_histogram": _latest(macd_histogram), "sma_crossover": crossover},
                 "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
 
     snapshot = _cached(f"snapshot:{yahoo_symbol}", 60, load)

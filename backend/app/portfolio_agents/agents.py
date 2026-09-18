@@ -11,9 +11,10 @@ from .agent_modules.sector import agent as sector
 from .agent_modules.sector_thesis import agent as sector_thesis
 from .agent_modules.stock_thesis import agent as stock_thesis
 from .agent_modules.synthesis import agent as synthesize
+from .agent_modules.technical import agent as technical
 from .schemas import PortfolioState
 
-AGENTS = {item.name: item for item in (ingestion, sector, asset, risk, stock_thesis, sector_thesis, fundamental, critic, synthesize)}
+AGENTS = {item.name: item for item in (ingestion, sector, asset, technical, risk, stock_thesis, sector_thesis, fundamental, critic, synthesize)}
 
 
 def run(name: str, state: PortfolioState, correction: str | None = None) -> dict[str, object]:
@@ -24,6 +25,7 @@ def run(name: str, state: PortfolioState, correction: str | None = None) -> dict
 def ingestion_agent(state: PortfolioState) -> dict[str, object]: return run("ingestion", state)
 def sector_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("sector", state, correction)
 def asset_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("asset", state, correction)
+def technical_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("technical", state, correction)
 def risk_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("risk", state, correction)
 def stock_thesis_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("stock_thesis", state, correction)
 def sector_thesis_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("sector_thesis", state, correction)

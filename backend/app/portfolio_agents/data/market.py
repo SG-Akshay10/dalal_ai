@@ -30,15 +30,68 @@ def resolve_sector(ticker: str, provided_sector: str | None, exchange: str = "NS
 
 def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, Any]) -> Technicals:
     closes = [float(row["close"]) for row in history if _finite(row.get("close"))]
+    historical_count = len(history)
     if len(closes) < 2:
-        return Technicals(rsi14=indicators.get("rsi14"), macd_histogram=indicators.get("macd_histogram"), crossover=indicators.get("sma_crossover", "unavailable"))
+        return Technicals(
+            rsi14=_finite(indicators.get("rsi14")),
+            macd_histogram=_finite(indicators.get("macd_histogram")),
+            crossover=indicators.get("sma_crossover", "unavailable"),
+            historical_bars_count=historical_count,
+        )
+
+    last_row = history[-1] if history else {}
     returns = [closes[index] / closes[index - 1] - 1 for index in range(1, len(closes))]
     mean = sum(returns) / len(returns)
     volatility = math.sqrt(sum((item - mean) ** 2 for item in returns) / max(1, len(returns) - 1)) * math.sqrt(252) * 100
     peak = closes[0]
     drawdown = min((price / max(peak := max(peak, price), 0.000001) - 1) * 100 for price in closes)
     recent = closes[-60:] if len(closes) >= 60 else closes
-    return Technicals(rsi14=indicators.get("rsi14"), sma50=history[-1].get("sma50"), sma200=history[-1].get("sma200"), macd_histogram=indicators.get("macd_histogram"), crossover=indicators.get("sma_crossover", "unavailable"), annualized_volatility_pct=round(volatility, 2), support=round(min(recent), 2), resistance=round(max(recent), 2), max_drawdown_pct=round(drawdown, 2))
+
+    mom14 = round((closes[-1] - closes[-14]) / closes[-14] * 100, 2) if len(closes) >= 14 and closes[-14] > 0 else None
+    bw_pct = _finite(last_row.get("bollinger_bandwidth_pct"))
+    squeeze = bool(bw_pct is not None and bw_pct < 5.0)
+
+    latest_vol = _finite(last_row.get("volume"))
+    avg_vol_20d = _finite(last_row.get("avg_volume_20d"))
+    vol_ratio = round(latest_vol / avg_vol_20d, 2) if latest_vol is not None and avg_vol_20d and avg_vol_20d > 0 else None
+    vol_surge = bool(vol_ratio is not None and vol_ratio >= 1.5)
+
+    sma20_val = _finite(last_row.get("sma20")) or _finite(indicators.get("sma20"))
+    sma50_val = _finite(last_row.get("sma50")) or _finite(indicators.get("sma50"))
+    sma200_val = _finite(last_row.get("sma200")) or _finite(indicators.get("sma200"))
+    ema12_val = _finite(last_row.get("ema12")) or _finite(indicators.get("ema12"))
+    ema26_val = _finite(last_row.get("ema26")) or _finite(indicators.get("ema26"))
+    rsi14_val = _finite(last_row.get("rsi14")) if last_row.get("rsi14") is not None else _finite(indicators.get("rsi14"))
+    macd_val = _finite(last_row.get("macd")) if last_row.get("macd") is not None else _finite(indicators.get("macd"))
+    signal_val = _finite(last_row.get("macd_signal")) if last_row.get("macd_signal") is not None else _finite(indicators.get("macd_signal"))
+    hist_val = _finite(last_row.get("macd_histogram")) if last_row.get("macd_histogram") is not None else _finite(indicators.get("macd_histogram"))
+
+    return Technicals(
+        rsi14=rsi14_val,
+        sma20=sma20_val,
+        sma50=sma50_val,
+        sma200=sma200_val,
+        ema12=ema12_val,
+        ema26=ema26_val,
+        macd_line=macd_val,
+        macd_signal=signal_val,
+        macd_histogram=hist_val,
+        crossover=indicators.get("sma_crossover", "unavailable"),
+        bollinger_upper=_finite(last_row.get("bollinger_upper")),
+        bollinger_lower=_finite(last_row.get("bollinger_lower")),
+        bollinger_bandwidth_pct=bw_pct,
+        bollinger_squeeze=squeeze,
+        annualized_volatility_pct=round(volatility, 2),
+        momentum_14d_pct=mom14,
+        avg_volume_20d=avg_vol_20d,
+        latest_volume=latest_vol,
+        volume_ratio=vol_ratio,
+        volume_surge=vol_surge,
+        support=round(min(recent), 2),
+        resistance=round(max(recent), 2),
+        max_drawdown_pct=round(drawdown, 2),
+        historical_bars_count=historical_count,
+    )
 
 
 def enrich_holding(holding: HoldingInput) -> EnrichedHolding:

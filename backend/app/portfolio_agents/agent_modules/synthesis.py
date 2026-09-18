@@ -52,6 +52,7 @@ class SynthesisAgent:
             "holdings": holding_summaries,
             "sector_analysis": state.sector_analysis.model_dump() if state.sector_analysis else None,
             "asset_analysis": state.asset_analysis.model_dump() if detailed and state.asset_analysis else None,
+            "technical_analysis": state.technical_analysis.model_dump() if detailed and state.technical_analysis else None,
             "risk_analysis": state.risk_analysis.model_dump() if state.risk_analysis else None,
             "stock_thesis": state.stock_thesis.model_dump() if state.stock_thesis else None,
             "sector_thesis": state.sector_thesis.model_dump() if state.sector_thesis else None,

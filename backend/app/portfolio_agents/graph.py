@@ -27,6 +27,10 @@ def _asset(state):
     return run("asset", _model(state))
 
 
+def _technical(state):
+    return run("technical", _model(state))
+
+
 def _risk(state):
     return run("risk", _model(state))
 
@@ -54,6 +58,7 @@ def _retry(state):
     updated = {
         **run("sector", model, feedback),
         **run("asset", model, feedback),
+        **run("technical", model, feedback),
         **run("risk", model, feedback),
         **run("stock_thesis", model, feedback),
         **run("sector_thesis", model, feedback),
@@ -78,6 +83,7 @@ def build_portfolio_graph():
     graph.add_node("ingestion", _ingest)
     graph.add_node("sector", _sector)
     graph.add_node("asset", _asset)
+    graph.add_node("technical", _technical)
     graph.add_node("risk", _risk)
     graph.add_node("stock_thesis", _stock_thesis)
     graph.add_node("sector_thesis", _sector_thesis)
@@ -88,11 +94,12 @@ def build_portfolio_graph():
     graph.add_edge(START, "ingestion")
     graph.add_edge("ingestion", "sector")
     graph.add_edge("ingestion", "asset")
+    graph.add_edge("ingestion", "technical")
     graph.add_edge("ingestion", "risk")
     graph.add_edge("ingestion", "stock_thesis")
     graph.add_edge("ingestion", "sector_thesis")
     graph.add_edge("ingestion", "fundamental")
-    graph.add_edge(["sector", "asset", "risk", "stock_thesis", "sector_thesis", "fundamental"], "critic")
+    graph.add_edge(["sector", "asset", "technical", "risk", "stock_thesis", "sector_thesis", "fundamental"], "critic")
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
     graph.add_edge("synthesize", END)
