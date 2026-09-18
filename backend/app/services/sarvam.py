@@ -218,7 +218,12 @@ def structured_completion(system_prompt: str, user_payload: Dict[str, Any], outp
         if start < 0 or end < start:
             raise ValueError("response did not contain JSON")
         return output_model.model_validate_json(raw[start:end + 1])
+    except httpx.HTTPStatusError as exc:
+        err_msg = f"Sarvam HTTP {exc.response.status_code}: {exc.response.text or exc}"
+        logger.error(err_msg)
+        raise SarvamStructuredOutputError(err_msg) from exc
     except (httpx.HTTPError, ValueError, ValidationError) as exc:
+        logger.error("Sarvam API structured output error: %s", exc)
         raise SarvamStructuredOutputError(str(exc)) from exc
 
 
@@ -235,5 +240,11 @@ def text_completion(system_prompt: str, user_payload: Dict[str, Any], max_tokens
         if not text:
             raise ValueError("Sarvam returned empty narrative")
         return text.replace("```", "").strip()
+    except httpx.HTTPStatusError as exc:
+        err_msg = f"Sarvam HTTP {exc.response.status_code}: {exc.response.text or exc}"
+        logger.error(err_msg)
+        raise SarvamStructuredOutputError(err_msg) from exc
     except (httpx.HTTPError, ValueError) as exc:
+        logger.error("Sarvam API text completion error: %s", exc)
         raise SarvamStructuredOutputError(str(exc)) from exc
+

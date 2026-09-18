@@ -36,3 +36,4 @@ prd.md
 *.db
 *.sqlite3
 backend/data/
+backend/portfolio_analysis_graph.png

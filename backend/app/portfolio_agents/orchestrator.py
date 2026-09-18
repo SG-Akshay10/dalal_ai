@@ -136,7 +136,7 @@ class PortfolioOrchestrator:
             if isinstance(results["errors"], list):
                 results["errors"].extend(errors)
 
-        results["_agent_latencies"] = agent_latencies
+        self._last_parallel_latencies = agent_latencies
         return results
 
     def run_pipeline(self, initial_state: PortfolioState) -> PortfolioState:
@@ -162,7 +162,7 @@ class PortfolioOrchestrator:
         t0 = time.perf_counter()
         analytical_updates = self._run_parallel_analytical_stage(current)
         stage_latencies["parallel_analytical"] = round((time.perf_counter() - t0) * 1000, 2)
-        parallel_latencies = analytical_updates.pop("_agent_latencies", {})
+        parallel_latencies = getattr(self, "_last_parallel_latencies", {})
         if isinstance(parallel_latencies, dict):
             agent_latencies.update(parallel_latencies)
         if analytical_updates.get("unavailable_dimensions"):
