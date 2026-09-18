@@ -54,7 +54,20 @@ from .valuation import (
     get_sector_valuation_benchmark,
 )
 
+from .cache import AgentDataCache, global_data_cache
+from .context_pruner import (
+    get_pruned_synthesis_context,
+    prune_enriched_holding,
+    prune_holding_input,
+)
+
 __all__ = [
+    # caching & context pruning
+    "AgentDataCache",
+    "global_data_cache",
+    "get_pruned_synthesis_context",
+    "prune_enriched_holding",
+    "prune_holding_input",
     # scenario analysis
     "build_scenario_analysis",
     # critic rules
@@ -91,3 +104,4 @@ __all__ = [
     "holding_quality",
     "market_data_is_fresh",
 ]
+

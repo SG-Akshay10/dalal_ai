@@ -492,4 +492,10 @@ class PortfolioState(BaseModel):
     retry_count: int = 0
     errors: list[str] = Field(default_factory=list)
     evidence: list[EvidenceRecord] = Field(default_factory=list)
+    stage_latencies_ms: dict[str, float] = Field(default_factory=dict)
+    agent_latencies_ms: dict[str, float] = Field(default_factory=dict)
+    total_latency_ms: float = 0.0
+    partial_analysis: bool = False
+    unavailable_dimensions: list[str] = Field(default_factory=list)
+
 

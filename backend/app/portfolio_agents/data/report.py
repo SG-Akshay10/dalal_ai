@@ -190,8 +190,12 @@ def build_consolidated_findings(state: PortfolioState) -> list[ConsolidatedFindi
 
 
 def compile_analytical_limitations(state: PortfolioState) -> list[str]:
-    """Compile portfolio-wide analytical limitations, data quality warnings, and critic findings."""
+    """Compile portfolio-wide analytical limitations, data quality warnings, unavailable dimensions, and critic findings."""
     limitations: list[str] = []
+
+    if state.partial_analysis or state.unavailable_dimensions:
+        dims = ", ".join(state.unavailable_dimensions) if state.unavailable_dimensions else "unspecified"
+        limitations.append(f"Partial Analysis Warning: The following analytical dimensions were unavailable or degraded: {dims}.")
 
     # Check state data errors and stale quality
     for h in state.enriched_holdings:
@@ -209,6 +213,7 @@ def compile_analytical_limitations(state: PortfolioState) -> list[str]:
         limitations.append(f"Sector gaps: Portfolio lacks exposure to major sectors including {', '.join(state.sector_analysis.missing_sectors[:4])}.")
 
     return list(dict.fromkeys(limitations))
+
 
 
 def build_executive_report_data(

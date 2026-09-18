@@ -94,7 +94,23 @@ def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, An
     )
 
 
+from .cache import global_data_cache
+
+
 def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
+    cache_key = global_data_cache.make_key(
+        "enrich_holding",
+        holding.ticker or holding.symbol,
+        holding.quantity,
+        holding.buy_price,
+        holding.current_price,
+        holding.market_data_as_of,
+        len(holding.historical_prices),
+    )
+    cached = global_data_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     ticker, errors = (holding.ticker or holding.symbol or "").upper(), []
     price, history, indicators, source, as_of = holding.current_price, list(holding.historical_prices), {}, "client-supplied", holding.market_data_as_of
     pe_ratio, forward_pe, pb_ratio, ev_ebitda, peg_ratio, price_to_sales, de_ratio, high_52w, low_52w, eg_pct = None, None, None, None, None, None, None, None, None, None
@@ -136,10 +152,13 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
         benchmark_pe=bm.get("pe_ratio"),
         benchmark_roe_pct=bm.get("roe_pct"),
     )
-    return EnrichedHolding(
+    result = EnrichedHolding(
         ticker=ticker, sector=sector, quantity=holding.quantity, buy_price=holding.buy_price,
         current_price=price, market_value=price * holding.quantity if price is not None else None,
         pnl_pct=round(pnl, 2) if pnl is not None else None, technicals=calculate_technicals(history, indicators),
         fundamentals=fundamentals, data_errors=errors,
         data_quality=holding_quality(source=source, as_of=as_of, errors=errors, missing_fields=missing)
     )
+    global_data_cache.set(cache_key, result)
+    return result
+
