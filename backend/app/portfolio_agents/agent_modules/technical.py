@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from .base import AgentResult
 from ..schemas import (
+    AnalyticalEvidence,
     PortfolioState,
     STOCK_LEVEL_ANALYSIS_LIMIT,
     TechnicalAnalysis,
@@ -163,6 +164,25 @@ class TechnicalAgent:
                 f"Investors should evaluate these signals alongside fundamental health, sector trends, and personal risk parameters. Educational technical analysis only; not investment advice."
             )
 
+            evidence_payload = AnalyticalEvidence(
+                supporting_metrics={
+                    "rsi14": t.rsi14,
+                    "macd_histogram": t.macd_histogram,
+                    "sma50": t.sma50,
+                    "sma200": t.sma200,
+                    "volume_ratio": t.volume_ratio,
+                    "annualized_volatility_pct": t.annualized_volatility_pct,
+                    "max_drawdown_pct": t.max_drawdown_pct,
+                },
+                historical_observations=patterns,
+                comparisons={"sma_crossover": t.crossover},
+                confidence_score=0.90 if holding.data_quality.fresh and holding.data_quality.complete else 0.70,
+                data_quality_rating="High" if holding.data_quality.complete else "Medium",
+                limitations=["Technical indicators reflect past price action and cannot foresee sudden corporate or news announcements."],
+                missing_information=[k for k, v in {"rsi14": t.rsi14, "sma50": t.sma50, "sma200": t.sma200}.items() if v is None],
+                interpretation=narrative,
+            )
+
             tech_findings.append(
                 TechnicalFinding(
                     ticker=holding.ticker,
@@ -174,6 +194,7 @@ class TechnicalAgent:
                     resistance=t.resistance,
                     detected_patterns=patterns,
                     narrative=narrative,
+                    evidence=evidence_payload,
                 )
             )
 

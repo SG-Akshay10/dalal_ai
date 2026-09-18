@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
-from ..schemas import EnrichedHolding, RiskFinding
+from ..schemas import AnalyticalEvidence, EnrichedHolding, RiskFinding
 from .fundamental import get_sector_benchmark
 
 
@@ -156,6 +156,27 @@ def extract_risk_finding(holding: EnrichedHolding) -> RiskFinding:
         f"{tax_obs} Educational risk diagnostic analysis only; not investment advice."
     )
 
+    evidence_payload = AnalyticalEvidence(
+        supporting_metrics={
+            "max_drawdown_pct": drawdown,
+            "annualized_volatility_pct": volatility,
+            "de_ratio": de_ratio,
+            "pe_ratio": pe_ratio,
+            "earnings_growth_pct": eg_pct,
+            "stop_loss_reference": stop_ref,
+        },
+        historical_observations=evidence_backed,
+        comparisons={
+            "leverage_threshold": lev_risk,
+            "valuation_benchmark": val_risk,
+        },
+        confidence_score=0.90 if holding.data_quality.fresh and holding.data_quality.complete else 0.70,
+        data_quality_rating="High" if holding.data_quality.complete else "Medium",
+        limitations=["Risk diagnostics evaluate historical drawdown and volatility; unmodeled macro events cannot be predicted with 100% precision."],
+        missing_information=[k for k in ["max_drawdown_pct", "annualized_volatility_pct", "de_ratio", "pe_ratio", "earnings_growth_pct"] if getattr(f, k, None) is None and getattr(t, k, None) is None],
+        interpretation=narrative,
+    )
+
     return RiskFinding(
         ticker=holding.ticker,
         severity=severity,
@@ -174,4 +195,5 @@ def extract_risk_finding(holding: EnrichedHolding) -> RiskFinding:
         agent_disagreements=disagreements,
         commentary=commentary_text,
         narrative=narrative,
+        evidence=evidence_payload,
     )

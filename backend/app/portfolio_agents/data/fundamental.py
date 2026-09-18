@@ -7,7 +7,7 @@ ROE, ROCE/ROA, leverage, cash flow conversion, multi-period trends, and benchmar
 from __future__ import annotations
 
 from typing import Any
-from ..schemas import EnrichedHolding, FinancialPeriod, FundamentalFinding, FundamentalMetrics
+from ..schemas import AnalyticalEvidence, EnrichedHolding, FinancialPeriod, FundamentalFinding, FundamentalMetrics
 
 # Reference benchmarks for standard sector groupings in Indian markets
 SECTOR_BENCHMARKS: dict[str, dict[str, float]] = {
@@ -186,6 +186,17 @@ def extract_fundamental_finding(holding: EnrichedHolding) -> FundamentalFinding:
         "free_cash_flow": metrics.free_cash_flow,
     }
 
+    evidence_payload = AnalyticalEvidence(
+        supporting_metrics=key_metrics_dict,
+        historical_observations=trend_lines,
+        comparisons={"sector_benchmark": benchmark_comparison},
+        confidence_score=0.90 if holding.data_quality.fresh and holding.data_quality.complete else 0.70,
+        data_quality_rating="High" if holding.data_quality.complete else "Medium",
+        limitations=["Quarterly statement filings introduce delayed fundamental visibility."],
+        missing_information=insufficient,
+        interpretation=narrative,
+    )
+
     return FundamentalFinding(
         ticker=holding.ticker,
         sector=holding.sector,
@@ -198,4 +209,5 @@ def extract_fundamental_finding(holding: EnrichedHolding) -> FundamentalFinding:
         historical_trend_analysis=historical_trend_analysis,
         benchmark_comparison=benchmark_comparison,
         narrative=narrative,
+        evidence=evidence_payload,
     )

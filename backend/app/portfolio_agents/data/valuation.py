@@ -8,7 +8,7 @@ of observed data versus analytical assumptions.
 from __future__ import annotations
 
 from typing import Any
-from ..schemas import EnrichedHolding, FundamentalMetrics, ValuationFinding
+from ..schemas import AnalyticalEvidence, EnrichedHolding, FundamentalMetrics, ValuationFinding
 
 SECTOR_VALUATION_BENCHMARKS: dict[str, dict[str, float]] = {
     "Information Technology": {"pe_ratio": 26.0, "pb_ratio": 6.5, "ev_ebitda": 18.0, "peg_ratio": 1.5, "ps_ratio": 4.5},
@@ -225,6 +225,17 @@ def extract_valuation_finding(holding: EnrichedHolding) -> ValuationFinding:
     ]
     narrative = "\n\n".join(narrative_sections)
 
+    evidence_payload = AnalyticalEvidence(
+        supporting_metrics=observed_metrics,
+        historical_observations=[historical_range_str],
+        comparisons={"peer_benchmark": comparative_benchmark_analysis},
+        confidence_score=0.90 if holding.data_quality.fresh and holding.data_quality.complete else 0.70,
+        data_quality_rating="High" if holding.data_quality.complete else "Medium",
+        limitations=["Forward valuation multiples rely on consensus analyst projections."],
+        missing_information=[k for k, v in observed_metrics.items() if v is None],
+        interpretation=narrative,
+    )
+
     return ValuationFinding(
         ticker=holding.ticker,
         sector=holding.sector,
@@ -237,4 +248,5 @@ def extract_valuation_finding(holding: EnrichedHolding) -> ValuationFinding:
         growth_adjusted_analysis=growth_adjusted_analysis,
         data_vs_assumptions_breakdown=breakdown_str,
         narrative=narrative,
+        evidence=evidence_payload,
     )

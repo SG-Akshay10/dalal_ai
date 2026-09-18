@@ -10,7 +10,7 @@ from ..schemas import ExecutiveReport, PortfolioState, STOCK_LEVEL_ANALYSIS_LIMI
 
 class SynthesisAgent:
     name = "synthesize"
-    prompt = """Produce a concise, readable educational Indian equity portfolio report using only supplied findings. Include sector, asset when supplied, risk, stock thesis when supplied, sector thesis, and non-personalized recommendations. Never give direct buy/sell instructions."""
+    prompt = """Produce a concise, readable educational Indian equity portfolio report using only supplied findings and structured evidence payloads. Base report insights directly on supporting metrics, benchmark comparisons, data quality ratings, confidence scores, and analytical limitations rather than relying exclusively on unstructured narratives. Never give direct buy/sell instructions."""
 
     @staticmethod
     def _is_prompt_echo(text: str) -> bool:

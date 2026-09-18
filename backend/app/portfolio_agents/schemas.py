@@ -115,12 +115,25 @@ class EnrichedHolding(BaseModel):
     data_quality: DataQuality = Field(default_factory=DataQuality)
 
 
+class AnalyticalEvidence(BaseModel):
+    """Standardized evidence payload separating raw empirical data from interpretation."""
+    supporting_metrics: dict[str, float | str | None] = Field(default_factory=dict)
+    historical_observations: list[str] = Field(default_factory=list)
+    comparisons: dict[str, str] = Field(default_factory=dict)
+    confidence_score: float = Field(default=0.85, ge=0.0, le=1.0)
+    data_quality_rating: Literal["High", "Medium", "Low"] = "High"
+    limitations: list[str] = Field(default_factory=list)
+    missing_information: list[str] = Field(default_factory=list)
+    interpretation: str = ""
+
+
 class SectorFinding(BaseModel):
     sector: str
     allocation_pct: float
     market_value: float
     risk_level: Literal["Low", "Medium", "High"]
     commentary: str
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class SectorAnalysis(BaseModel):
@@ -138,6 +151,7 @@ class AssetFinding(BaseModel):
     support: float | None = None
     resistance: float | None = None
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class AssetAnalysis(BaseModel):
@@ -155,6 +169,7 @@ class TechnicalFinding(BaseModel):
     resistance: float | None = None
     detected_patterns: list[str] = Field(default_factory=list)
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class TechnicalAnalysis(BaseModel):
@@ -181,6 +196,7 @@ class RiskFinding(BaseModel):
     agent_disagreements: list[str] = Field(default_factory=list)
     commentary: str = ""
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class RiskAnalysis(BaseModel):
@@ -201,6 +217,7 @@ class StockThesisFinding(BaseModel):
     pros: list[str] = Field(default_factory=list)
     cons: list[str] = Field(default_factory=list)
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class StockThesis(BaseModel):
@@ -217,6 +234,7 @@ class SectorThesisFinding(BaseModel):
     pros: list[str] = Field(default_factory=list)
     cons: list[str] = Field(default_factory=list)
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class SectorThesis(BaseModel):
@@ -235,6 +253,7 @@ class FundamentalFinding(BaseModel):
     historical_trend_analysis: str = ""
     benchmark_comparison: str = ""
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class FundamentalAnalysis(BaseModel):
@@ -257,6 +276,7 @@ class ValuationFinding(BaseModel):
     growth_adjusted_analysis: str = ""
     data_vs_assumptions_breakdown: str = ""
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class ValuationAnalysis(BaseModel):
@@ -287,6 +307,7 @@ class MarketContextFinding(BaseModel):
     observed_context_metrics: dict[str, float | str | None] = Field(default_factory=dict)
     analytical_assumptions: dict[str, float | str | None] = Field(default_factory=dict)
     narrative: str = ""
+    evidence: AnalyticalEvidence = Field(default_factory=AnalyticalEvidence)
 
 
 class MarketContextAnalysis(BaseModel):

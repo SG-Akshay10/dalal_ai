@@ -8,7 +8,7 @@ Designed with a modular provider architecture to support future external market 
 from __future__ import annotations
 
 from typing import Any, Literal
-from ..schemas import EnrichedHolding, MarketContextFinding
+from ..schemas import AnalyticalEvidence, EnrichedHolding, MarketContextFinding
 
 # Default broad market benchmark reference parameters (NIFTY 50)
 DEFAULT_BROAD_MARKET: dict[str, Any] = {
@@ -152,6 +152,20 @@ def extract_market_context_finding(holding: EnrichedHolding) -> MarketContextFin
         f"Educational market context analysis only; not investment advice."
     )
 
+    evidence_payload = AnalyticalEvidence(
+        supporting_metrics=observed_metrics,
+        historical_observations=[f"14-day momentum is {stock_mom_str}"],
+        comparisons={
+            "broad_market": f"{market_bm['name']} 14d return is {market_bm['momentum_14d_pct']:+.2f}%",
+            "sector_index": f"{sector_bm['name']} 14d return is {sector_bm['momentum_14d_pct']:+.2f}%",
+        },
+        confidence_score=0.90 if holding.data_quality.fresh and holding.data_quality.complete else 0.70,
+        data_quality_rating="High" if holding.data_quality.complete else "Medium",
+        limitations=["Benchmark indices reflect broad sector movements rather than stock-specific operational factors."],
+        missing_information=[k for k, v in observed_metrics.items() if v is None],
+        interpretation=narrative,
+    )
+
     return MarketContextFinding(
         ticker=holding.ticker,
         sector=holding.sector,
@@ -163,4 +177,5 @@ def extract_market_context_finding(holding: EnrichedHolding) -> MarketContextFin
         observed_context_metrics=observed_metrics,
         analytical_assumptions=analytical_assumptions,
         narrative=narrative,
+        evidence=evidence_payload,
     )
