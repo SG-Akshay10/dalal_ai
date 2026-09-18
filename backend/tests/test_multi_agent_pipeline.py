@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from app.portfolio_agents import agents
 from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
-from app.portfolio_agents.schemas import AssetAnalysis, AssetFinding, EnrichedHolding, HoldingInput, PortfolioState, Technicals
+from app.portfolio_agents.schemas import AssetAnalysis, AssetFinding, EnrichedHolding, EvidenceRecord, HoldingInput, PortfolioState, Technicals
 from app.portfolio_agents.tools import calculate_technicals, diversification_score, enrich_holding, market_data_is_fresh
 from app.services.sarvam import SarvamStructuredOutputError
 
@@ -16,10 +16,6 @@ def fake_enrich(holding):
 
 def fake_text_completion(*_args, **_kwargs):
     return "This is a valid Sarvam-generated executive portfolio narrative."
-
-
-def fake_no_news(*_args, **_kwargs):
-    return []
 
 
 class MultiAgentPipelineTests(unittest.TestCase):
@@ -44,8 +40,6 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(market_data_is_fresh(datetime.now(timezone.utc).isoformat()))
         self.assertFalse(market_data_is_fresh((datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()))
 
-    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
-    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=fake_text_completion)
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_pipeline_generates_detailed_report_for_twenty_or_fewer(self, *_):
@@ -56,8 +50,6 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(state.stock_thesis.applicable)
         self.assertTrue(state.sector_thesis.findings)
 
-    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
-    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=fake_text_completion)
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_pipeline_uses_sector_only_mode_above_twenty_holdings(self, *_):
@@ -72,8 +64,12 @@ class MultiAgentPipelineTests(unittest.TestCase):
         result = agents.critic_agent(state)["critic"]
         self.assertFalse(result.passed)
 
-    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
-    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
+    def test_critic_rejects_unverified_external_evidence(self):
+        state = PortfolioState(raw_holdings=[], evidence=[EvidenceRecord(source="future-news", subject="INFY", claim="Unverified claim", retrieved_at="2026-01-01T00:00:00Z", quality_score=0.4, verified=False)])
+        result = agents.critic_agent(state)["critic"]
+        self.assertFalse(result.passed)
+        self.assertIn("External evidence failed verification or minimum quality requirements", result.issues)
+
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=SarvamStructuredOutputError("unavailable"))
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_sarvam_failure_hides_report_via_typed_error(self, *_):

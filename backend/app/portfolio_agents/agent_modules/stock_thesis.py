@@ -1,8 +1,7 @@
-"""Per-stock thesis agent, grounded in supplied technical data and optional headlines."""
+"""Per-stock thesis agent grounded only in enriched portfolio evidence."""
 
 from __future__ import annotations
 
-from app.services.ingestion import fetch_rss_news
 from app.services.sarvam import SarvamStructuredOutputError, structured_completion
 
 from .base import AgentResult
@@ -11,7 +10,7 @@ from ..schemas import PortfolioState, STOCK_LEVEL_ANALYSIS_LIMIT, StockThesis, S
 
 class StockThesisAgent:
     name = "stock_thesis"
-    prompt = """You are the Stock Thesis Subagent for an Indian equity portfolio. Using only supplied technicals, fundamentals if present, and recent news headlines, identify concrete growth drivers, decline risks, pros, and cons. Keep every phrase specific and grounded in supplied data. Use educational language only; never issue direct buy/sell instructions."""
+    prompt = """You are the Stock Thesis Subagent for an Indian equity portfolio. Using only supplied position measurements and technical indicators, identify concrete growth drivers, decline risks, pros, and cons. Keep every phrase specific and grounded in supplied data. Do not infer earnings, valuation, corporate events, or news. Use educational language only; never issue direct buy/sell instructions."""
 
     @staticmethod
     def fallback(holding) -> StockThesisFinding:
@@ -30,9 +29,7 @@ class StockThesisAgent:
             return {"stock_thesis": StockThesis(applicable=False, reason_if_not_applicable=f"Portfolio holds more than {STOCK_LEVEL_ANALYSIS_LIMIT} individual stocks; individual stock thesis is skipped in favor of sector-wide analysis.")}
         findings = []
         for holding in state.enriched_holdings:
-            try: headlines = [item["title"] for item in fetch_rss_news(holding.ticker)][:8]
-            except Exception: headlines = []
-            payload = {"ticker": holding.ticker, "sector": holding.sector, "market_value": holding.market_value, "pnl_pct": holding.pnl_pct, "technicals": holding.technicals.model_dump(), "recent_headlines": headlines}
+            payload = {"ticker": holding.ticker, "sector": holding.sector, "market_value": holding.market_value, "pnl_pct": holding.pnl_pct, "technicals": holding.technicals.model_dump()}
             try: finding = structured_completion(self.prompt, payload, StockThesisFinding, correction=correction, max_tokens=900)
             except SarvamStructuredOutputError: finding = self.fallback(holding)
             findings.append(finding)

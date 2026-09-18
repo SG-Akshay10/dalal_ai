@@ -11,7 +11,12 @@ AgentResult = dict[str, object]
 
 
 class PortfolioAgent(Protocol):
-    """A stateless agent that consumes and returns only structured state."""
+    """A stateless agent that consumes and returns only structured state.
+
+    Optional external-source agents, such as a future News Agent, must return
+    typed ``EvidenceRecord`` values in the ``evidence`` state field. They must
+    not pass raw source content directly to analytical agents.
+    """
 
     name: str
 

@@ -128,6 +128,21 @@ class CriticResult(BaseModel):
     issues: list[str] = Field(default_factory=list)
 
 
+class EvidenceRecord(BaseModel):
+    """Evidence produced by an optional external-information agent.
+
+    The active pipeline has no external news evidence. Future source agents must
+    emit records through this model so the critic can reject unverified or
+    low-quality material before it reaches a report.
+    """
+    source: str
+    subject: str
+    claim: str
+    retrieved_at: str
+    quality_score: float = Field(ge=0, le=1)
+    verified: bool = False
+
+
 class ExecutiveReport(BaseModel):
     headline: str
     executive_summary: str
@@ -152,3 +167,4 @@ class PortfolioState(BaseModel):
     report: ExecutiveReport | None = None
     retry_count: int = 0
     errors: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceRecord] = Field(default_factory=list)
