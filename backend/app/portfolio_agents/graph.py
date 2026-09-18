@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.services.sarvam import SarvamStructuredOutputError
 from .agents import run
+from .orchestrator import PortfolioOrchestrator
 from .schemas import PortfolioState
 
 
@@ -133,13 +134,16 @@ def build_portfolio_graph():
 
 
 
-def run_portfolio_pipeline(holdings: list[dict]) -> PortfolioState:
+def run_portfolio_pipeline(
+    holdings: list[dict], enabled_agents: list[str] | None = None
+) -> PortfolioState:
     try:
         initial = PortfolioState(raw_holdings=holdings)
-        result = build_portfolio_graph().invoke(initial)
-        final = PortfolioState.model_validate(result)
+        orchestrator = PortfolioOrchestrator(enabled_agents=enabled_agents)
+        final = orchestrator.run_pipeline(initial)
         if final.report is None or (final.critic and not final.critic.passed):
             raise PortfolioAnalysisUnavailable("Sarvam could not produce a validated portfolio report")
         return final
     except SarvamStructuredOutputError as exc:
         raise PortfolioAnalysisUnavailable(str(exc)) from exc
+
