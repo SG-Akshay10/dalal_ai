@@ -23,6 +23,7 @@ from app.database import DatabaseManager
 from app.services.market_data import market_quote, market_snapshot
 from app.services.sector_lookup import fetch_sector
 from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
+from app.portfolio_agents.tools import market_data_is_fresh
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 logger = logging.getLogger(__name__)
@@ -75,9 +76,12 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
     cache_input = [{key: holding.get(key) for key in ("ticker", "symbol", "quantity", "buy_price", "sector", "exchange")} for holding in holdings]
     cache_key = f"{RISK_REPORT_CACHE_VERSION}:{user_id(user)}:{hashlib.sha256(json.dumps(cache_input, sort_keys=True, default=str).encode()).hexdigest()}"
     now = time.time()
+    # A cached report must not mask dashboard market data that is more than ten
+    # minutes old: the pipeline will refresh stale positions before rebuilding.
+    dashboard_market_data_fresh = all(market_data_is_fresh(holding.get("market_data_as_of")) for holding in holdings)
     with _RISK_REPORT_CACHE_LOCK:
         cached = _RISK_REPORT_CACHE.get(cache_key)
-        if cached and cached[0] > now:
+        if cached and cached[0] > now and dashboard_market_data_fresh:
             cached_payload = dict(cached[1])
             cached_payload["analysis_cached"] = True
             cached_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached[0] - RISK_REPORT_CACHE_TTL_SECONDS))

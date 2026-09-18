@@ -1,10 +1,11 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from app.portfolio_agents import agents
 from app.portfolio_agents.graph import PortfolioAnalysisUnavailable, run_portfolio_pipeline
-from app.portfolio_agents.schemas import AssetAnalysis, AssetFinding, EnrichedHolding, PortfolioState, Technicals
-from app.portfolio_agents.tools import calculate_technicals, diversification_score
+from app.portfolio_agents.schemas import AssetAnalysis, AssetFinding, EnrichedHolding, HoldingInput, PortfolioState, Technicals
+from app.portfolio_agents.tools import calculate_technicals, diversification_score, enrich_holding, market_data_is_fresh
 from app.services.sarvam import SarvamStructuredOutputError
 
 
@@ -27,6 +28,21 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertEqual(technicals.crossover, "bullish")
         self.assertIsNotNone(technicals.support)
         self.assertLess(diversification_score({"Tech": 100}, 100), 1)
+
+    @patch("app.portfolio_agents.tools.market_snapshot")
+    def test_enrichment_uses_supplied_history_without_refetching_it(self, snapshot):
+        holding = enrich_holding(HoldingInput(symbol="INFY", quantity=2, buy_price=100, current_price=120, market_data_as_of=datetime.now(timezone.utc).isoformat(), historical_prices=[
+            {"time": "2026-01-01", "close": 100, "sma50": 95, "sma200": 90, "rsi14": 55, "macd_histogram": 1},
+            {"time": "2026-01-02", "close": 120, "sma50": 100, "sma200": 91, "rsi14": 60, "macd_histogram": 2},
+        ]))
+        snapshot.assert_not_called()
+        self.assertEqual(holding.current_price, 120)
+        self.assertEqual(holding.technicals.crossover, "bullish")
+        self.assertEqual(holding.technicals.rsi14, 60)
+
+    def test_dashboard_market_data_expires_after_ten_minutes(self):
+        self.assertTrue(market_data_is_fresh(datetime.now(timezone.utc).isoformat()))
+        self.assertFalse(market_data_is_fresh((datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()))
 
     @patch.object(agents, "fetch_sector_news", side_effect=fake_no_news)
     @patch.object(agents, "fetch_rss_news", side_effect=fake_no_news)

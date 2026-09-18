@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 from app.services.market_data import market_snapshot
 from app.services.portfolio_risk import DEFAULT_SECTORS, SYMBOL_SECTORS
 from app.services.sector_lookup import fetch_sector
 from .schemas import EnrichedHolding, HoldingInput, Technicals
+
+MARKET_DATA_MAX_AGE_SECONDS = 10 * 60
 
 
 def resolve_sector(ticker: str, provided_sector: str | None, exchange: str = "NSE") -> str:
@@ -40,16 +43,41 @@ def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, An
     return Technicals(rsi14=indicators.get("rsi14"), sma50=history[-1].get("sma50"), sma200=history[-1].get("sma200"), macd_histogram=indicators.get("macd_histogram"), crossover=indicators.get("sma_crossover", "unavailable"), annualized_volatility_pct=round(volatility, 2), support=round(min(recent), 2), resistance=round(max(recent), 2), max_drawdown_pct=round(drawdown, 2))
 
 
+def market_data_is_fresh(as_of: str | None) -> bool:
+    if not as_of:
+        return False
+    try:
+        timestamp = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            return False
+        age = (datetime.now(timezone.utc) - timestamp.astimezone(timezone.utc)).total_seconds()
+        return 0 <= age <= MARKET_DATA_MAX_AGE_SECONDS
+    except (TypeError, ValueError):
+        return False
+
+
 def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     ticker = (holding.ticker or holding.symbol or "").upper()
     errors: list[str] = []
-    price, history, indicators = holding.current_price, [], {}
-    try:
-        snapshot = market_snapshot(ticker, holding.exchange)
-        price = snapshot.get("price") or price
-        history, indicators = snapshot.get("history", []), snapshot.get("indicators", {})
-    except Exception as exc:
-        errors.append(f"Market data unavailable: {exc}")
+    price, history, indicators = holding.current_price, list(holding.historical_prices), {}
+    if history and market_data_is_fresh(holding.market_data_as_of):
+        latest = history[-1]
+        indicators = {
+            "rsi14": latest.get("rsi14"),
+            "macd_histogram": latest.get("macd_histogram"),
+            "sma_crossover": (
+                "bullish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) > float(latest["sma200"])
+                else "bearish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) < float(latest["sma200"])
+                else "neutral"
+            ),
+        }
+    else:
+        try:
+            snapshot = market_snapshot(ticker, holding.exchange)
+            price = snapshot.get("price") or price
+            history, indicators = snapshot.get("history", []), snapshot.get("indicators", {})
+        except Exception as exc:
+            errors.append(f"Market data unavailable: {exc}")
     if price is None:
         errors.append("Current price unavailable")
     pnl = ((price - holding.buy_price) / holding.buy_price * 100) if price is not None and holding.buy_price else None

@@ -16,6 +16,13 @@ class HoldingInput(BaseModel):
     current_price: float | None = Field(default=None, ge=0)
     sector: str | None = None
     exchange: str = "NSE"
+    # Chart rows may be supplied by the dashboard so the portfolio analysis can
+    # use the exact series already displayed to the user instead of fetching it
+    # a second time.
+    historical_prices: list[dict[str, float | str | None]] = Field(default_factory=list)
+    # Timestamp for the dashboard quote/history snapshot. The backend refreshes
+    # market data when this is absent or older than ten minutes.
+    market_data_as_of: str | None = None
 
 
 class Technicals(BaseModel):
