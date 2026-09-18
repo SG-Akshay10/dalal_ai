@@ -3,7 +3,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from app.services.sarvam import SarvamStructuredOutputError
-from .agents import asset_agent, critic_agent, ingestion_agent, risk_agent, sector_agent, sector_thesis_agent, stock_thesis_agent, synthesizer_agent
+from .agents import run
 from .schemas import PortfolioState
 
 
@@ -16,43 +16,43 @@ def _model(value: dict | PortfolioState) -> PortfolioState:
 
 
 def _ingest(state):
-    return ingestion_agent(_model(state))
+    return run("ingestion", _model(state))
 
 
 def _sector(state):
-    return sector_agent(_model(state))
+    return run("sector", _model(state))
 
 
 def _asset(state):
-    return asset_agent(_model(state))
+    return run("asset", _model(state))
 
 
 def _risk(state):
-    return risk_agent(_model(state))
+    return run("risk", _model(state))
 
 
 def _stock_thesis(state):
-    return stock_thesis_agent(_model(state))
+    return run("stock_thesis", _model(state))
 
 
 def _sector_thesis(state):
-    return sector_thesis_agent(_model(state))
+    return run("sector_thesis", _model(state))
 
 
 def _critic(state):
-    return critic_agent(_model(state))
+    return run("critic", _model(state))
 
 
 def _retry(state):
     model = _model(state)
     feedback = "; ".join(model.critic.issues if model.critic else [])
     # Re-run every independent analyst once with the critic feedback before rechecking.
-    updated = {**sector_agent(model, feedback), **asset_agent(model, feedback), **risk_agent(model, feedback), **stock_thesis_agent(model, feedback), **sector_thesis_agent(model, feedback)}
+    updated = {**run("sector", model, feedback), **run("asset", model, feedback), **run("risk", model, feedback), **run("stock_thesis", model, feedback), **run("sector_thesis", model, feedback)}
     return {**updated, "retry_count": model.retry_count + 1}
 
 
 def _synthesize(state):
-    return synthesizer_agent(_model(state))
+    return run("synthesize", _model(state))
 
 
 def _route_after_critic(state):

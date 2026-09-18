@@ -44,10 +44,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(market_data_is_fresh(datetime.now(timezone.utc).isoformat()))
         self.assertFalse(market_data_is_fresh((datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()))
 
-    @patch.object(agents, "fetch_sector_news", side_effect=fake_no_news)
-    @patch.object(agents, "fetch_rss_news", side_effect=fake_no_news)
-    @patch.object(agents, "text_completion", side_effect=fake_text_completion)
-    @patch.object(agents, "enrich_holding", side_effect=fake_enrich)
+    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=fake_text_completion)
+    @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_pipeline_generates_detailed_report_for_twenty_or_fewer(self, *_):
         state = run_portfolio_pipeline([{"symbol": "INFY", "quantity": 2, "buy_price": 100, "current_price": 100}])
         self.assertTrue(state.report)
@@ -56,10 +56,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(state.stock_thesis.applicable)
         self.assertTrue(state.sector_thesis.findings)
 
-    @patch.object(agents, "fetch_sector_news", side_effect=fake_no_news)
-    @patch.object(agents, "fetch_rss_news", side_effect=fake_no_news)
-    @patch.object(agents, "text_completion", side_effect=fake_text_completion)
-    @patch.object(agents, "enrich_holding", side_effect=fake_enrich)
+    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=fake_text_completion)
+    @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_pipeline_uses_sector_only_mode_above_twenty_holdings(self, *_):
         state = run_portfolio_pipeline([{"symbol": f"STOCK{index}", "quantity": 1, "buy_price": 100, "current_price": 100} for index in range(21)])
         self.assertFalse(state.asset_analysis.detailed_mode)
@@ -72,10 +72,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         result = agents.critic_agent(state)["critic"]
         self.assertFalse(result.passed)
 
-    @patch.object(agents, "fetch_sector_news", side_effect=fake_no_news)
-    @patch.object(agents, "fetch_rss_news", side_effect=fake_no_news)
-    @patch.object(agents, "text_completion", side_effect=SarvamStructuredOutputError("unavailable"))
-    @patch.object(agents, "enrich_holding", side_effect=fake_enrich)
+    @patch("app.portfolio_agents.agent_modules.sector_thesis.fetch_sector_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.stock_thesis.fetch_rss_news", side_effect=fake_no_news)
+    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion", side_effect=SarvamStructuredOutputError("unavailable"))
+    @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding", side_effect=fake_enrich)
     def test_sarvam_failure_hides_report_via_typed_error(self, *_):
         with self.assertRaises(PortfolioAnalysisUnavailable):
             run_portfolio_pipeline([{"symbol": "INFY", "quantity": 1, "buy_price": 100}])
