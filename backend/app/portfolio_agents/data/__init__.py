@@ -20,6 +20,13 @@ from .market import (
     enrich_holding,
     resolve_sector,
 )
+from .market_context import (
+    classify_movement_alignment,
+    evaluate_relative_strength,
+    extract_market_context_finding,
+    get_broad_market_benchmark,
+    get_sector_market_benchmark,
+)
 from .portfolio import (
     allocation,
     diversification_score,
@@ -50,6 +57,12 @@ __all__ = [
     "calculate_historical_valuation_range",
     "extract_valuation_finding",
     "get_sector_valuation_benchmark",
+    # market context calculations
+    "classify_movement_alignment",
+    "evaluate_relative_strength",
+    "extract_market_context_finding",
+    "get_broad_market_benchmark",
+    "get_sector_market_benchmark",
     # market enrichment
     "calculate_technicals",
     "enrich_holding",

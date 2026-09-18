@@ -251,6 +251,37 @@ class ValuationAnalysis(BaseModel):
     overall_valuation_stance: Literal["Attractive", "Fair", "Elevated", "Mixed", "Unavailable"] = "Fair"
 
 
+class MarketContextFinding(BaseModel):
+    ticker: str
+    sector: str
+    relative_strength_vs_market: float | None = None
+    relative_strength_vs_sector: float | None = None
+    movement_alignment: Literal[
+        "Aligned with Market & Sector",
+        "Outperforming Broad Market",
+        "Outperforming Sector",
+        "Underperforming Broad Market",
+        "Underperforming Sector",
+        "Diverging Positively",
+        "Diverging Negatively",
+        "Synchronized Movement",
+    ] = "Synchronized Movement"
+    market_trend_environment: Literal["Bullish", "Bearish", "Neutral", "High Volatility"] = "Neutral"
+    sector_trend_environment: Literal["Bullish", "Bearish", "Neutral", "High Volatility"] = "Neutral"
+    observed_context_metrics: dict[str, float | str | None] = Field(default_factory=dict)
+    analytical_assumptions: dict[str, float | str | None] = Field(default_factory=dict)
+    narrative: str = ""
+
+
+class MarketContextAnalysis(BaseModel):
+    applicable: bool
+    reason_if_not_applicable: str = ""
+    broad_market_benchmark: str = "NIFTY 50"
+    market_regime_summary: str = ""
+    findings: list[MarketContextFinding] = Field(default_factory=list)
+    overall_market_context_summary: str = ""
+
+
 class CriticResult(BaseModel):
     passed: bool
     issues: list[str] = Field(default_factory=list)
@@ -281,6 +312,7 @@ class ExecutiveReport(BaseModel):
     sector_thesis_commentary: str = ""
     fundamental_commentary: str = ""
     valuation_commentary: str = ""
+    market_context_commentary: str = ""
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
 
@@ -296,8 +328,10 @@ class PortfolioState(BaseModel):
     sector_thesis: SectorThesis | None = None
     fundamental_analysis: FundamentalAnalysis | None = None
     valuation_analysis: ValuationAnalysis | None = None
+    market_context_analysis: MarketContextAnalysis | None = None
     critic: CriticResult | None = None
     report: ExecutiveReport | None = None
     retry_count: int = 0
     errors: list[str] = Field(default_factory=list)
     evidence: list[EvidenceRecord] = Field(default_factory=list)
+

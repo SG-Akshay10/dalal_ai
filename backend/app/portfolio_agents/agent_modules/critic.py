@@ -32,6 +32,12 @@ class CriticAgent:
             issues.append("Valuation analysis findings are missing despite being applicable")
         if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and state.valuation_analysis and state.valuation_analysis.applicable and any(len(item.narrative.split()) < 100 for item in state.valuation_analysis.findings):
             issues.append("An individual valuation analysis narrative is shorter than 100 words")
+        if not state.market_context_analysis:
+            issues.append("Market context analysis is missing")
+        if state.market_context_analysis and state.market_context_analysis.applicable and not state.market_context_analysis.findings:
+            issues.append("Market context analysis findings are missing despite being applicable")
+        if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and state.market_context_analysis and state.market_context_analysis.applicable and any(len(item.narrative.split()) < 100 for item in state.market_context_analysis.findings):
+            issues.append("An individual market context analysis narrative is shorter than 100 words")
         invalid_evidence = [item for item in state.evidence if not item.verified or item.quality_score < 0.7]
         if invalid_evidence:
             issues.append("External evidence failed verification or minimum quality requirements")

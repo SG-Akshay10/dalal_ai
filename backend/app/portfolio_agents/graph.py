@@ -51,6 +51,10 @@ def _valuation(state):
     return run("valuation", _model(state))
 
 
+def _market_context(state):
+    return run("market_context", _model(state))
+
+
 def _critic(state):
     return run("critic", _model(state))
 
@@ -68,6 +72,7 @@ def _retry(state):
         **run("sector_thesis", model, feedback),
         **run("fundamental", model, feedback),
         **run("valuation", model, feedback),
+        **run("market_context", model, feedback),
     }
     return {**updated, "retry_count": model.retry_count + 1}
 
@@ -94,6 +99,7 @@ def build_portfolio_graph():
     graph.add_node("sector_thesis", _sector_thesis)
     graph.add_node("fundamental", _fundamental)
     graph.add_node("valuation", _valuation)
+    graph.add_node("market_context", _market_context)
     graph.add_node("critic", _critic)
     graph.add_node("retry", _retry)
     graph.add_node("synthesize", _synthesize)
@@ -106,7 +112,8 @@ def build_portfolio_graph():
     graph.add_edge("ingestion", "sector_thesis")
     graph.add_edge("ingestion", "fundamental")
     graph.add_edge("ingestion", "valuation")
-    graph.add_edge(["sector", "asset", "technical", "risk", "stock_thesis", "sector_thesis", "fundamental", "valuation"], "critic")
+    graph.add_edge("ingestion", "market_context")
+    graph.add_edge(["sector", "asset", "technical", "risk", "stock_thesis", "sector_thesis", "fundamental", "valuation", "market_context"], "critic")
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
     graph.add_edge("synthesize", END)

@@ -224,6 +224,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(state.valuation_analysis.applicable)
         self.assertTrue(len(state.valuation_analysis.findings) > 0)
         self.assertIn("INFY", state.report.valuation_commentary)
+        self.assertIsNotNone(state.market_context_analysis)
+        self.assertTrue(state.market_context_analysis.applicable)
+        self.assertTrue(len(state.market_context_analysis.findings) > 0)
+        self.assertIn("INFY", state.report.market_context_commentary)
 
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
            side_effect=fake_text_completion)

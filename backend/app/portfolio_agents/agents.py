@@ -6,6 +6,7 @@ from .agent_modules.asset import agent as asset
 from .agent_modules.critic import agent as critic
 from .agent_modules.fundamental import agent as fundamental
 from .agent_modules.ingestion import agent as ingestion
+from .agent_modules.market_context import agent as market_context
 from .agent_modules.risk import agent as risk
 from .agent_modules.sector import agent as sector
 from .agent_modules.sector_thesis import agent as sector_thesis
@@ -15,7 +16,7 @@ from .agent_modules.technical import agent as technical
 from .agent_modules.valuation import agent as valuation
 from .schemas import PortfolioState
 
-AGENTS = {item.name: item for item in (ingestion, sector, asset, technical, risk, stock_thesis, sector_thesis, fundamental, valuation, critic, synthesize)}
+AGENTS = {item.name: item for item in (ingestion, sector, asset, technical, risk, stock_thesis, sector_thesis, fundamental, valuation, market_context, critic, synthesize)}
 
 
 def run(name: str, state: PortfolioState, correction: str | None = None) -> dict[str, object]:
@@ -32,5 +33,6 @@ def stock_thesis_agent(state: PortfolioState, correction: str | None = None) -> 
 def sector_thesis_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("sector_thesis", state, correction)
 def fundamental_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("fundamental", state, correction)
 def valuation_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("valuation", state, correction)
+def market_context_agent(state: PortfolioState, correction: str | None = None) -> dict[str, object]: return run("market_context", state, correction)
 def critic_agent(state: PortfolioState) -> dict[str, object]: return run("critic", state)
 def synthesizer_agent(state: PortfolioState) -> dict[str, object]: return run("synthesize", state)
