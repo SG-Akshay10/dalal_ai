@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.services.sarvam import text_completion
 
 from .base import AgentResult
+from ..data.synthesis import synthesize_cross_agent_findings
 from ..schemas import ExecutiveReport, PortfolioState, STOCK_LEVEL_ANALYSIS_LIMIT
 
 
@@ -27,6 +28,7 @@ class SynthesisAgent:
 
     def run(self, state: PortfolioState, correction: str | None = None) -> AgentResult:
         detailed = len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT
+        synthesis_result = synthesize_cross_agent_findings(state)
         # Build a scoped holding summary: the LLM only needs identifiers,
         # position-level performance, and data-quality status to write the
         # executive narrative.  Raw technical arrays are already processed by
@@ -59,6 +61,7 @@ class SynthesisAgent:
             "fundamental_analysis": state.fundamental_analysis.model_dump() if state.fundamental_analysis else None,
             "valuation_analysis": state.valuation_analysis.model_dump() if state.valuation_analysis else None,
             "market_context_analysis": state.market_context_analysis.model_dump() if state.market_context_analysis else None,
+            "synthesis": synthesis_result.model_dump(),
             "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7],
             "data_errors": [error for item in state.enriched_holdings for error in item.data_errors],
         }
@@ -76,7 +79,7 @@ class SynthesisAgent:
         fundamental_text = state.fundamental_analysis.overall_summary + "\n" + "\n".join(f"{item.ticker}: {item.narrative}" for item in state.fundamental_analysis.findings) if state.fundamental_analysis and state.fundamental_analysis.applicable and state.fundamental_analysis.findings else (state.fundamental_analysis.reason_if_not_applicable if state.fundamental_analysis and not state.fundamental_analysis.applicable else "Fundamental analysis was unavailable.")
         valuation_text = state.valuation_analysis.portfolio_valuation_summary + "\n" + "\n".join(f"{item.ticker}: {item.narrative}" for item in state.valuation_analysis.findings) if state.valuation_analysis and state.valuation_analysis.applicable and state.valuation_analysis.findings else (state.valuation_analysis.reason_if_not_applicable if state.valuation_analysis and not state.valuation_analysis.applicable else "Valuation analysis was unavailable.")
         market_context_text = state.market_context_analysis.overall_market_context_summary + "\n" + "\n".join(f"{item.ticker}: {item.narrative}" for item in state.market_context_analysis.findings) if state.market_context_analysis and state.market_context_analysis.applicable and state.market_context_analysis.findings else (state.market_context_analysis.reason_if_not_applicable if state.market_context_analysis and not state.market_context_analysis.applicable else "Market context analysis was unavailable.")
-        return {"report": ExecutiveReport(headline="Portfolio executive analysis", executive_summary=narrative, sector_commentary=sector_text, asset_commentary=asset_text, risk_commentary=risk_text, stock_thesis_commentary=stock_text, sector_thesis_commentary=sector_thesis_text, fundamental_commentary=fundamental_text, valuation_commentary=valuation_text, market_context_commentary=market_context_text, recommendations=["Review concentration and position-size limits against personal goals.", "Monitor material changes in sector exposure, volatility, and drawdown."], disclaimer="Educational analysis only; not investment advice.")}
+        return {"report": ExecutiveReport(headline="Portfolio executive analysis", executive_summary=narrative, sector_commentary=sector_text, asset_commentary=asset_text, risk_commentary=risk_text, stock_thesis_commentary=stock_text, sector_thesis_commentary=sector_thesis_text, fundamental_commentary=fundamental_text, valuation_commentary=valuation_text, market_context_commentary=market_context_text, synthesis=synthesis_result, recommendations=["Review concentration and position-size limits against personal goals.", "Monitor material changes in sector exposure, volatility, and drawdown."], disclaimer="Educational analysis only; not investment advice.")}
 
 
 agent = SynthesisAgent()

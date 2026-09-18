@@ -339,6 +339,39 @@ class EvidenceRecord(BaseModel):
     verified: bool = False
 
 
+class SynthesisSignalAgreement(BaseModel):
+    ticker: str
+    agreeing_dimensions: list[str] = Field(default_factory=list)
+    consensus_signal: str = ""
+    evidence_count: int = 0
+    supporting_evidence_summary: str = ""
+
+
+class ContradictionAnalysis(BaseModel):
+    ticker: str
+    dimensions_in_conflict: list[str] = Field(default_factory=list)
+    conflict_description: str = ""
+    bullish_case_factors: list[str] = Field(default_factory=list)
+    bearish_case_factors: list[str] = Field(default_factory=list)
+    resolution_narrative: str = ""
+
+
+class TimeHorizonThesis(BaseModel):
+    ticker: str
+    short_term_outlook: str = ""   # Tactical / technical / momentum (0-3 months)
+    medium_term_outlook: str = ""  # Cyclical / valuation / market context (3-12 months)
+    long_term_outlook: str = ""    # Structural / fundamental / business model (1-5 years)
+    time_horizon_alignment: Literal["Aligned Across Horizons", "Short-Term Bullish / Long-Term Cautious", "Short-Term Bearish / Long-Term Bullish", "Divergent Across Horizons"] = "Aligned Across Horizons"
+
+
+class ExecutiveSynthesis(BaseModel):
+    overall_portfolio_thesis: str = ""
+    agreements: list[SynthesisSignalAgreement] = Field(default_factory=list)
+    contradictions: list[ContradictionAnalysis] = Field(default_factory=list)
+    time_horizon_theses: list[TimeHorizonThesis] = Field(default_factory=list)
+    key_conviction_drivers: list[str] = Field(default_factory=list)
+
+
 class ExecutiveReport(BaseModel):
     headline: str
     executive_summary: str
@@ -350,6 +383,7 @@ class ExecutiveReport(BaseModel):
     fundamental_commentary: str = ""
     valuation_commentary: str = ""
     market_context_commentary: str = ""
+    synthesis: ExecutiveSynthesis = Field(default_factory=ExecutiveSynthesis)
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
 
