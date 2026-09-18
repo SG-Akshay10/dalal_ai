@@ -432,6 +432,27 @@ class ScenarioAnalysis(BaseModel):
     portfolio_level_inflection_points: list[str] = Field(default_factory=list)
 
 
+class TraceableClaim(BaseModel):
+    """A specific narrative or report claim mapped back to source analytical findings and underlying data."""
+    claim: str
+    ticker: str | None = None
+    dimension: str  # e.g. "Fundamental", "Technical", "Valuation", "Market Context", "Risk", "Synthesis", "Scenario"
+    supporting_metrics: dict[str, float | str | None] = Field(default_factory=dict)
+    supporting_observations: list[str] = Field(default_factory=list)
+    confidence_score: float = Field(default=0.85, ge=0.0, le=1.0)
+
+
+class ConsolidatedFinding(BaseModel):
+    """A consolidated holding profile merging technical, fundamental, valuation, risk, and scenario takeaways without duplication."""
+    ticker: str
+    sector: str
+    overall_stance: str
+    key_drivers: list[str] = Field(default_factory=list)
+    primary_risks: list[str] = Field(default_factory=list)
+    scenario_leaning: str = "Base"
+    time_horizon_summary: str = ""
+
+
 class ExecutiveReport(BaseModel):
     headline: str
     executive_summary: str
@@ -445,8 +466,12 @@ class ExecutiveReport(BaseModel):
     market_context_commentary: str = ""
     scenario_commentary: str = ""
     synthesis: ExecutiveSynthesis = Field(default_factory=ExecutiveSynthesis)
+    traceable_claims: list[TraceableClaim] = Field(default_factory=list)
+    consolidated_findings: list[ConsolidatedFinding] = Field(default_factory=list)
+    analytical_limitations: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
+
 
 
 class PortfolioState(BaseModel):

@@ -203,10 +203,11 @@ class MultiAgentPipelineTests(unittest.TestCase):
     # Full pipeline
     # ------------------------------------------------------------------
 
-    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
+    @patch("app.portfolio_agents.agent_modules.report_generator.text_completion",
            side_effect=fake_text_completion)
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding",
            side_effect=fake_enrich)
+
     def test_pipeline_generates_detailed_report_for_twenty_or_fewer(self, *_):
         state = run_portfolio_pipeline([
             {"symbol": "INFY", "quantity": 2, "buy_price": 100, "current_price": 100}
@@ -229,10 +230,11 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(len(state.market_context_analysis.findings) > 0)
         self.assertIn("INFY", state.report.market_context_commentary)
 
-    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
+    @patch("app.portfolio_agents.agent_modules.report_generator.text_completion",
            side_effect=fake_text_completion)
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding",
            side_effect=fake_enrich)
+
     def test_pipeline_uses_sector_only_mode_above_twenty_holdings(self, *_):
         state = run_portfolio_pipeline([
             {"symbol": f"STOCK{index}", "quantity": 1, "buy_price": 100, "current_price": 100}
@@ -245,10 +247,11 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertFalse(state.valuation_analysis.applicable)
         self.assertTrue(state.sector_thesis.findings)
 
-    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
+    @patch("app.portfolio_agents.agent_modules.report_generator.text_completion",
            side_effect=fake_text_completion)
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding",
            side_effect=fake_enrich)
+
     def test_enriched_holdings_carry_data_quality_in_pipeline(self, *_):
         """Every enriched holding in a pipeline run must carry a DataQuality record."""
         state = run_portfolio_pipeline([
@@ -281,8 +284,9 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("External evidence failed verification or minimum quality requirements", result.issues)
 
-    @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
+    @patch("app.portfolio_agents.agent_modules.report_generator.text_completion",
            side_effect=SarvamStructuredOutputError("unavailable"))
+
     @patch("app.portfolio_agents.agent_modules.ingestion.enrich_holding",
            side_effect=fake_enrich)
     def test_sarvam_failure_hides_report_via_typed_error(self, *_):

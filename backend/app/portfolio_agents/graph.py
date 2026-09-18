@@ -85,6 +85,10 @@ def _scenario(state):
     return run("scenario_analysis", _model(state))
 
 
+def _report_generator(state):
+    return run("report_generator", _model(state))
+
+
 def _route_after_critic(state):
     model = _model(state)
     if model.critic and model.critic.passed:
@@ -108,6 +112,7 @@ def build_portfolio_graph():
     graph.add_node("retry", _retry)
     graph.add_node("synthesize", _synthesize)
     graph.add_node("scenario_analysis", _scenario)
+    graph.add_node("report_generator", _report_generator)
     graph.add_edge(START, "ingestion")
     graph.add_edge("ingestion", "sector")
     graph.add_edge("ingestion", "asset")
@@ -122,8 +127,10 @@ def build_portfolio_graph():
     graph.add_conditional_edges("critic", _route_after_critic, {"retry": "retry", "synthesize": "synthesize", "unavailable": END})
     graph.add_edge("retry", "critic")
     graph.add_edge("synthesize", "scenario_analysis")
-    graph.add_edge("scenario_analysis", END)
+    graph.add_edge("scenario_analysis", "report_generator")
+    graph.add_edge("report_generator", END)
     return graph.compile()
+
 
 
 def run_portfolio_pipeline(holdings: list[dict]) -> PortfolioState:
