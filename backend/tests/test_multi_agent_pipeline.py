@@ -18,10 +18,14 @@ from app.portfolio_agents.schemas import (
 )
 from app.portfolio_agents.data import (
     calculate_fundamental_health,
+    calculate_growth_adjusted_valuation,
+    calculate_historical_valuation_range,
     calculate_technicals,
     diversification_score,
     enrich_holding,
     extract_fundamental_finding,
+    extract_valuation_finding,
+    get_sector_valuation_benchmark,
     holding_quality,
     market_data_is_fresh,
 )
@@ -44,10 +48,18 @@ def fake_enrich(holding):
         ),
         fundamentals=FundamentalMetrics(
             pe_ratio=24.5,
+            forward_pe=22.0,
+            pb_ratio=5.8,
+            ev_ebitda=16.5,
+            peg_ratio=1.4,
+            price_to_sales=4.1,
+            fifty_two_week_high=130.0,
+            fifty_two_week_low=85.0,
             roe_pct=18.5,
             de_ratio=0.2,
             operating_margin_pct=16.0,
             revenue_growth_pct=12.0,
+            earnings_growth_pct=17.5,
             free_cash_flow=5000000.0,
             historical_periods=[
                 FinancialPeriod(period="FY2023", revenue=10000000, net_margin_pct=14.0),
@@ -89,6 +101,23 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertEqual(finding.ticker, "INFY")
         self.assertTrue(any("12.0%" in item for item in finding.positive_developments))
         self.assertIn("FY2023", finding.historical_trend_analysis)
+
+    # ------------------------------------------------------------------
+    # Valuation calculations
+    # ------------------------------------------------------------------
+
+    def test_valuation_calculation_and_finding(self):
+        """extract_valuation_finding correctly calculates ranges, benchmarks, growth adjustments, and observed vs assumed breakdown."""
+        holding = fake_enrich(HoldingInput(symbol="INFY", quantity=10, buy_price=100, current_price=100))
+        finding = extract_valuation_finding(holding)
+        self.assertEqual(finding.ticker, "INFY")
+        self.assertIn("observed_metrics", finding.model_dump())
+        self.assertIn("valuation_assumptions", finding.model_dump())
+        self.assertEqual(finding.observed_metrics["trailing_pe"], 24.5)
+        self.assertEqual(finding.observed_metrics["forward_pe"], 22.0)
+        self.assertIn("ANALYTICAL ASSUMPTIONS", finding.data_vs_assumptions_breakdown)
+        self.assertIn("OBSERVED MARKET DATA", finding.data_vs_assumptions_breakdown)
+        self.assertGreaterEqual(len(finding.narrative.split()), 100)
 
     # ------------------------------------------------------------------
     # Data-quality metadata
@@ -191,6 +220,10 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertTrue(state.fundamental_analysis.applicable)
         self.assertTrue(len(state.fundamental_analysis.findings) > 0)
         self.assertIn("INFY", state.report.fundamental_commentary)
+        self.assertIsNotNone(state.valuation_analysis)
+        self.assertTrue(state.valuation_analysis.applicable)
+        self.assertTrue(len(state.valuation_analysis.findings) > 0)
+        self.assertIn("INFY", state.report.valuation_commentary)
 
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",
            side_effect=fake_text_completion)
@@ -205,6 +238,7 @@ class MultiAgentPipelineTests(unittest.TestCase):
         self.assertEqual(state.asset_analysis.findings, [])
         self.assertFalse(state.stock_thesis.applicable)
         self.assertFalse(state.fundamental_analysis.applicable)
+        self.assertFalse(state.valuation_analysis.applicable)
         self.assertTrue(state.sector_thesis.findings)
 
     @patch("app.portfolio_agents.agent_modules.synthesis.text_completion",

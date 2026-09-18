@@ -78,7 +78,13 @@ class FinancialPeriod(BaseModel):
 
 class FundamentalMetrics(BaseModel):
     pe_ratio: float | None = None
+    forward_pe: float | None = None
     pb_ratio: float | None = None
+    ev_ebitda: float | None = None
+    peg_ratio: float | None = None
+    price_to_sales: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
     de_ratio: float | None = None
     roe_pct: float | None = None
     roce_pct: float | None = None
@@ -223,6 +229,28 @@ class FundamentalAnalysis(BaseModel):
     overall_summary: str = ""
 
 
+class ValuationFinding(BaseModel):
+    ticker: str
+    sector: str
+    current_price: float | None = None
+    valuation_assessment: Literal["Undervalued", "Fairly Valued", "Overvalued", "Speculative / High Growth", "Unavailable"] = "Unavailable"
+    observed_metrics: dict[str, float | str | None] = Field(default_factory=dict)
+    valuation_assumptions: dict[str, float | str | None] = Field(default_factory=dict)
+    historical_valuation_range: str = ""
+    comparative_benchmark_analysis: str = ""
+    growth_adjusted_analysis: str = ""
+    data_vs_assumptions_breakdown: str = ""
+    narrative: str = ""
+
+
+class ValuationAnalysis(BaseModel):
+    applicable: bool
+    reason_if_not_applicable: str = ""
+    findings: list[ValuationFinding] = Field(default_factory=list)
+    portfolio_valuation_summary: str = ""
+    overall_valuation_stance: Literal["Attractive", "Fair", "Elevated", "Mixed", "Unavailable"] = "Fair"
+
+
 class CriticResult(BaseModel):
     passed: bool
     issues: list[str] = Field(default_factory=list)
@@ -252,6 +280,7 @@ class ExecutiveReport(BaseModel):
     stock_thesis_commentary: str = ""
     sector_thesis_commentary: str = ""
     fundamental_commentary: str = ""
+    valuation_commentary: str = ""
     recommendations: list[str] = Field(min_length=1)
     disclaimer: str
 
@@ -266,6 +295,7 @@ class PortfolioState(BaseModel):
     stock_thesis: StockThesis | None = None
     sector_thesis: SectorThesis | None = None
     fundamental_analysis: FundamentalAnalysis | None = None
+    valuation_analysis: ValuationAnalysis | None = None
     critic: CriticResult | None = None
     report: ExecutiveReport | None = None
     retry_count: int = 0

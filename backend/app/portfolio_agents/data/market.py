@@ -97,7 +97,7 @@ def calculate_technicals(history: list[dict[str, Any]], indicators: dict[str, An
 def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     ticker, errors = (holding.ticker or holding.symbol or "").upper(), []
     price, history, indicators, source, as_of = holding.current_price, list(holding.historical_prices), {}, "client-supplied", holding.market_data_as_of
-    pe_ratio, de_ratio = None, None
+    pe_ratio, forward_pe, pb_ratio, ev_ebitda, peg_ratio, price_to_sales, de_ratio, high_52w, low_52w, eg_pct = None, None, None, None, None, None, None, None, None, None
     if history and market_data_is_fresh(as_of):
         latest = history[-1]
         indicators = {"rsi14": latest.get("rsi14"), "macd_histogram": latest.get("macd_histogram"), "sma_crossover": "bullish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) > float(latest["sma200"]) else "bearish" if latest.get("sma50") is not None and latest.get("sma200") is not None and float(latest["sma50"]) < float(latest["sma200"]) else "neutral"}
@@ -107,6 +107,14 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
             snapshot = market_snapshot(ticker, holding.exchange)
             price, history, indicators, as_of = snapshot.get("price") or price, snapshot.get("history", []), snapshot.get("indicators", {}), snapshot.get("as_of")
             pe_ratio, de_ratio = _finite(snapshot.get("pe_ratio")), _finite(snapshot.get("de_ratio"))
+            forward_pe = _finite(snapshot.get("forward_pe"))
+            pb_ratio = _finite(snapshot.get("pb_ratio"))
+            ev_ebitda = _finite(snapshot.get("ev_ebitda"))
+            peg_ratio = _finite(snapshot.get("peg_ratio"))
+            price_to_sales = _finite(snapshot.get("price_to_sales"))
+            high_52w = _finite(snapshot.get("fifty_two_week_high"))
+            low_52w = _finite(snapshot.get("fifty_two_week_low"))
+            eg_pct = _finite(snapshot.get("earnings_growth_pct"))
         except Exception as exc:
             errors.append(f"Market data unavailable: {exc}")
     missing = (["current_price"] if price is None else []) + (["historical_prices"] if len(history) < 2 else [])
@@ -116,6 +124,14 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     bm = get_sector_benchmark(sector)
     fundamentals = FundamentalMetrics(
         pe_ratio=pe_ratio,
+        forward_pe=forward_pe,
+        pb_ratio=pb_ratio,
+        ev_ebitda=ev_ebitda,
+        peg_ratio=peg_ratio,
+        price_to_sales=price_to_sales,
+        fifty_two_week_high=high_52w,
+        fifty_two_week_low=low_52w,
+        earnings_growth_pct=eg_pct,
         de_ratio=de_ratio,
         benchmark_pe=bm.get("pe_ratio"),
         benchmark_roe_pct=bm.get("roe_pct"),

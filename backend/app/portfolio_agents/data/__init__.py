@@ -30,6 +30,13 @@ from .quality import (
     holding_quality,
     market_data_is_fresh,
 )
+from .valuation import (
+    SECTOR_VALUATION_BENCHMARKS,
+    calculate_growth_adjusted_valuation,
+    calculate_historical_valuation_range,
+    extract_valuation_finding,
+    get_sector_valuation_benchmark,
+)
 
 __all__ = [
     # fundamental calculations
@@ -37,6 +44,12 @@ __all__ = [
     "calculate_fundamental_health",
     "extract_fundamental_finding",
     "get_sector_benchmark",
+    # valuation calculations
+    "SECTOR_VALUATION_BENCHMARKS",
+    "calculate_growth_adjusted_valuation",
+    "calculate_historical_valuation_range",
+    "extract_valuation_finding",
+    "get_sector_valuation_benchmark",
     # market enrichment
     "calculate_technicals",
     "enrich_holding",

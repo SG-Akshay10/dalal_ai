@@ -291,18 +291,36 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                 "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
 
     snapshot = _cached(f"snapshot:{yahoo_symbol}", 60, load)
-    # quoteSummary provides PE and D/E; absence should not make the chart fail.
+    # quoteSummary provides valuation and balance sheet parameters; absence should not fail snapshot.
     try:
-        summary = _get(f"/v10/finance/quoteSummary/{yahoo_symbol}", {"modules": "summaryDetail,defaultKeyStatistics"})
+        summary = _get(f"/v10/finance/quoteSummary/{yahoo_symbol}", {"modules": "summaryDetail,defaultKeyStatistics,financialData"})
         modules = ((summary.get("quoteSummary") or {}).get("result") or [{}])[0]
-        detail, stats = modules.get("summaryDetail", {}), modules.get("defaultKeyStatistics", {})
+        detail = modules.get("summaryDetail", {})
+        stats = modules.get("defaultKeyStatistics", {})
+        financial = modules.get("financialData", {})
+        
+        def _raw_val(val: Any) -> float | None:
+            if isinstance(val, dict):
+                return _finite(val.get("raw"))
+            return _finite(val)
+
         snapshot = dict(snapshot)
-        snapshot["pe_ratio"] = (detail.get("trailingPE") or stats.get("trailingPE") or {}).get("raw") if isinstance(detail.get("trailingPE") or stats.get("trailingPE"), dict) else None
-        snapshot["de_ratio"] = (stats.get("debtToEquity") or {}).get("raw")
+        snapshot["pe_ratio"] = _raw_val(detail.get("trailingPE") or stats.get("trailingPE"))
+        snapshot["forward_pe"] = _raw_val(detail.get("forwardPE") or stats.get("forwardPE"))
+        snapshot["pb_ratio"] = _raw_val(detail.get("priceToBook") or stats.get("priceToBook"))
+        snapshot["ev_ebitda"] = _raw_val(detail.get("enterpriseToEbitda") or stats.get("enterpriseToEbitda"))
+        snapshot["peg_ratio"] = _raw_val(stats.get("pegRatio") or detail.get("pegRatio"))
+        snapshot["price_to_sales"] = _raw_val(detail.get("priceToSalesTrailing12Months"))
+        snapshot["de_ratio"] = _raw_val(stats.get("debtToEquity"))
+        snapshot["fifty_two_week_high"] = _raw_val(detail.get("fiftyTwoWeekHigh"))
+        snapshot["fifty_two_week_low"] = _raw_val(detail.get("fiftyTwoWeekLow"))
+        
+        eg = _raw_val(financial.get("earningsGrowth") or stats.get("earningsQuarterlyGrowth"))
+        snapshot["earnings_growth_pct"] = eg * 100.0 if eg is not None and abs(eg) <= 10.0 else eg
     except Exception:
         snapshot = dict(snapshot)
-        snapshot.setdefault("pe_ratio", None)
-        snapshot.setdefault("de_ratio", None)
+        for field in ("pe_ratio", "forward_pe", "pb_ratio", "ev_ebitda", "peg_ratio", "price_to_sales", "de_ratio", "fifty_two_week_high", "fifty_two_week_low", "earnings_growth_pct"):
+            snapshot.setdefault(field, None)
     return snapshot
 
 

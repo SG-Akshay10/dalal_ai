@@ -26,6 +26,12 @@ class CriticAgent:
             issues.append("Fundamental analysis is missing")
         if state.fundamental_analysis and state.fundamental_analysis.applicable and not state.fundamental_analysis.findings:
             issues.append("Fundamental analysis findings are missing despite being applicable")
+        if not state.valuation_analysis:
+            issues.append("Valuation analysis is missing")
+        if state.valuation_analysis and state.valuation_analysis.applicable and not state.valuation_analysis.findings:
+            issues.append("Valuation analysis findings are missing despite being applicable")
+        if len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT and state.valuation_analysis and state.valuation_analysis.applicable and any(len(item.narrative.split()) < 100 for item in state.valuation_analysis.findings):
+            issues.append("An individual valuation analysis narrative is shorter than 100 words")
         invalid_evidence = [item for item in state.evidence if not item.verified or item.quality_score < 0.7]
         if invalid_evidence:
             issues.append("External evidence failed verification or minimum quality requirements")
