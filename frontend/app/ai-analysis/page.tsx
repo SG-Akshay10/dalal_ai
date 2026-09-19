@@ -95,6 +95,9 @@ export default function AiAnalysisPage() {
       if (response.ok) {
         setRiskReport(await response.json());
         setReportLoaded(true);
+      } else if (response.status === 429) {
+        const errData = await response.json().catch(() => ({}));
+        setReportError(errData.detail || "Rate limit reached: Each account can only generate 1 AI analysis per day.");
       } else if (response.status === 503) {
         setRiskReport(null);
         setReportError("AI analysis is temporarily unavailable. Please retry.");

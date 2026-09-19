@@ -87,6 +87,19 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
             cached_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached[0] - RISK_REPORT_CACHE_TTL_SECONDS))
             cached_payload["analysis_refresh_after"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached[0]))
             return cached_payload
+    # Enforce 1-per-day rate limit per account for new analysis generation
+    current_user_id = user_id(user)
+    last_analysis_time = DatabaseManager.get_last_analysis_timestamp(current_user_id)
+    if last_analysis_time:
+        from datetime import datetime, timezone, timedelta
+        now_dt = datetime.now(timezone.utc)
+        if (now_dt - last_analysis_time) < timedelta(days=1):
+            next_available = last_analysis_time + timedelta(days=1)
+            formatted_next = next_available.strftime("%Y-%m-%d %H:%M:%S UTC")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit reached: Each account can only generate 1 AI analysis per day. Next analysis available after {formatted_next}."
+            )
     try:
         state = run_portfolio_pipeline(holdings)
         report = state.report
@@ -101,6 +114,7 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
             "stock_level_risk_profiles": [{"ticker": item.ticker, "sector": next((holding.sector for holding in state.enriched_holdings if holding.ticker == item.ticker), "Unknown"), "overall_risk_rating": item.severity} for item in (risk.findings if risk else [])],
             "executive_report": report.model_dump(mode="json") if report else None,
         }
+        DatabaseManager.log_analysis_generation(current_user_id)
         with _RISK_REPORT_CACHE_LOCK:
             expires_at = time.time() + RISK_REPORT_CACHE_TTL_SECONDS
             response_payload["analysis_cached"] = False

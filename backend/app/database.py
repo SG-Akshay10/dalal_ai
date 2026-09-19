@@ -4,7 +4,12 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
-from supabase import create_client, Client
+try:
+    from supabase import create_client, Client
+except Exception:
+    create_client = None
+    Client = None
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,8 +20,8 @@ logging.basicConfig(level=logging.INFO)
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
-supabase_client: Optional[Client] = None
-if SUPABASE_URL and SUPABASE_KEY:
+supabase_client: Optional[Any] = None
+if SUPABASE_URL and SUPABASE_KEY and create_client:
     try:
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception as e:
@@ -106,6 +111,15 @@ def init_sqlite_db():
         channel TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'delivered',
         sent_at TEXT NOT NULL
+    );
+    """)
+
+    # user_analysis_logs table for rate limiting
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_analysis_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        generated_at TEXT NOT NULL
     );
     """)
 
@@ -445,6 +459,55 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def get_last_analysis_timestamp(user_id: str) -> Optional[datetime]:
+        """Return the most recent analysis generation datetime (UTC) for a user, or None."""
+        if supabase_client:
+            try:
+                res = supabase_client.table("user_analysis_logs").select("generated_at").eq("user_id", user_id).order("generated_at", desc=True).limit(1).execute()
+                if res.data and len(res.data) > 0:
+                    raw_dt = res.data[0]["generated_at"]
+                    return datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
+            except Exception as e:
+                logger.info(f"Supabase user_analysis_logs query failed ({e}), falling back to local store.")
+
+        conn = get_sqlite_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT generated_at FROM user_analysis_logs WHERE user_id = ? ORDER BY generated_at DESC LIMIT 1", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row["generated_at"]:
+            return datetime.fromisoformat(row["generated_at"].replace("Z", "+00:00"))
+        return None
+
+    @staticmethod
+    def log_analysis_generation(user_id: str) -> Dict[str, Any]:
+        """Log a new AI analysis generation timestamp for a user."""
+        import uuid
+        log_id = str(uuid.uuid4())
+        generated_at = datetime.now(timezone.utc).isoformat()
+
+        record = {
+            "id": log_id,
+            "user_id": user_id,
+            "generated_at": generated_at
+        }
+
+        if supabase_client:
+            try:
+                supabase_client.table("user_analysis_logs").insert(record).execute()
+            except Exception as e:
+                logger.info(f"Supabase log_analysis_generation failed ({e}).")
+
+        conn = get_sqlite_conn()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO user_analysis_logs (id, user_id, generated_at) VALUES (?, ?, ?)", (log_id, user_id, generated_at))
+        conn.commit()
+        conn.close()
+
+        return record
 
 # Backward compatibility alias
 database = DatabaseManager
