@@ -1,7 +1,8 @@
 .wrapper {
-  max-width: 960px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
-  padding: 1.5rem 1.5rem 3rem;
+  padding: 1.5rem 2rem 3rem;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 72px);
@@ -93,7 +94,6 @@
   color: var(--text-secondary);
   font-size: 0.88rem;
   margin: 0;
-  max-width: 520px;
 }
 
 .errorText {

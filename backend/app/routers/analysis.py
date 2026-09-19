@@ -70,6 +70,12 @@ def get_cached_risk_profile(user: dict = Depends(get_current_user)):
                 cached_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at - RISK_REPORT_CACHE_TTL_SECONDS))
                 cached_payload["analysis_refresh_after"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at))
                 return cached_payload
+
+    db_report = DatabaseManager.get_latest_analysis_report(uid)
+    if db_report:
+        db_report["analysis_cached"] = True
+        return db_report
+
     return {"cached_report": None}
 
 
@@ -112,6 +118,11 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
         if (now_dt - last_analysis_time) < timedelta(days=1):
             next_available = last_analysis_time + timedelta(days=1)
             formatted_next = next_available.strftime("%Y-%m-%d %H:%M:%S UTC")
+            # If a report exists in DB within 24 hours, return it instead of 429
+            existing_db_report = DatabaseManager.get_latest_analysis_report(current_user_id)
+            if existing_db_report:
+                existing_db_report["analysis_cached"] = True
+                return existing_db_report
             raise HTTPException(
                 status_code=429,
                 detail=f"Rate limit reached: Each account can only generate 1 AI analysis per day. Next analysis available after {formatted_next}."
@@ -130,7 +141,7 @@ def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current
             "stock_level_risk_profiles": [{"ticker": item.ticker, "sector": next((holding.sector for holding in state.enriched_holdings if holding.ticker == item.ticker), "Unknown"), "overall_risk_rating": item.severity} for item in (risk.findings if risk else [])],
             "executive_report": report.model_dump(mode="json") if report else None,
         }
-        DatabaseManager.log_analysis_generation(current_user_id)
+        DatabaseManager.log_analysis_generation(current_user_id, response_payload)
         with _RISK_REPORT_CACHE_LOCK:
             expires_at = time.time() + RISK_REPORT_CACHE_TTL_SECONDS
             response_payload["analysis_cached"] = False

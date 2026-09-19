@@ -114,12 +114,13 @@ def init_sqlite_db():
     );
     """)
 
-    # user_analysis_logs table for rate limiting
+    # user_analysis_logs table for rate limiting and report persistence
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_analysis_logs (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        generated_at TEXT NOT NULL
+        generated_at TEXT NOT NULL,
+        report_json TEXT
     );
     """)
 
@@ -483,16 +484,45 @@ class DatabaseManager:
         return None
 
     @staticmethod
-    def log_analysis_generation(user_id: str) -> Dict[str, Any]:
-        """Log a new AI analysis generation timestamp for a user."""
+    def get_latest_analysis_report(user_id: str) -> Optional[Dict[str, Any]]:
+        """Return the most recent analysis generation record with report_json within last 24 hours, or None."""
+        from datetime import datetime, timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        if supabase_client:
+            try:
+                res = supabase_client.table("user_analysis_logs").select("generated_at", "report_json").eq("user_id", user_id).gte("generated_at", cutoff).order("generated_at", desc=True).limit(1).execute()
+                if res.data and len(res.data) > 0 and res.data[0].get("report_json"):
+                    raw_json = res.data[0]["report_json"]
+                    return json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+            except Exception as e:
+                logger.info(f"Supabase get_latest_analysis_report query failed ({e}), falling back to local store.")
+
+        conn = get_sqlite_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT report_json FROM user_analysis_logs WHERE user_id = ? AND generated_at >= ? AND report_json IS NOT NULL ORDER BY generated_at DESC LIMIT 1", (user_id, cutoff))
+            row = cursor.fetchone()
+            if row and row["report_json"]:
+                return json.loads(row["report_json"])
+        except Exception as e:
+            logger.info(f"SQLite get_latest_analysis_report query failed ({e}).")
+        finally:
+            conn.close()
+        return None
+
+    @staticmethod
+    def log_analysis_generation(user_id: str, report_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Log a new AI analysis generation timestamp and store report_json for a user."""
         import uuid
         log_id = str(uuid.uuid4())
         generated_at = datetime.now(timezone.utc).isoformat()
+        report_json_str = json.dumps(report_data, default=str) if report_data else None
 
         record = {
             "id": log_id,
             "user_id": user_id,
-            "generated_at": generated_at
+            "generated_at": generated_at,
+            "report_json": report_json_str
         }
 
         if supabase_client:
@@ -503,7 +533,14 @@ class DatabaseManager:
 
         conn = get_sqlite_conn()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO user_analysis_logs (id, user_id, generated_at) VALUES (?, ?, ?)", (log_id, user_id, generated_at))
+        # Migration check for existing SQLite database without report_json column
+        try:
+            cursor.execute("ALTER TABLE user_analysis_logs ADD COLUMN report_json TEXT")
+            conn.commit()
+        except Exception:
+            pass
+
+        cursor.execute("INSERT INTO user_analysis_logs (id, user_id, generated_at, report_json) VALUES (?, ?, ?, ?)", (log_id, user_id, generated_at, report_json_str))
         conn.commit()
         conn.close()
 
