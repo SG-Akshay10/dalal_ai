@@ -9,7 +9,6 @@ import styles from "./dashboard.module.css";
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
 type Position = { holding: Holding; invested_amount: number; current_amount?: number | null; quote?: { price?: number; source?: string; as_of?: string; previous_close?: number; day_change_pct?: number; currency?: string }; error?: string | null; sector?: string | null };
 type PortfolioAnalysis = { positions: Position[]; total_invested: number; total_current: number; price_coverage: number };
-type RiskReport = { summary: { portfolio_risk_level: string; diversification_verdict: string; sarvam_insight?: string | null } };
 type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number; sma50?: number | null; sma200?: number | null; bollinger_upper?: number | null; bollinger_lower?: number | null; rsi14?: number | null; macd?: number | null; macd_signal?: number | null; macd_histogram?: number | null };
 type IndicatorSummary = { rsi14?: number | null; macd?: number | null; macd_signal?: number | null; macd_histogram?: number | null; sma_crossover?: "bullish" | "bearish" | "neutral" };
 type HistoryState = { data?: Candle[]; indicators?: IndicatorSummary; source?: string; asOf?: string; error?: string; loading: boolean };
@@ -64,7 +63,6 @@ export default function DashboardPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [symbol, setSymbol] = useState(""); const [quantity, setQuantity] = useState(""); const [buyPrice, setBuyPrice] = useState(""); const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null); const [busy, setBusy] = useState(""); const [message, setMessage] = useState("");
-  const [, setRiskReport] = useState<RiskReport | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(true);
   const [histories, setHistories] = useState<Record<string, HistoryState>>({});
   const [openCharts, setOpenCharts] = useState<Record<string, boolean>>({});
@@ -86,12 +84,7 @@ export default function DashboardPage() {
     if (portfolioResponse.ok) {
       const result = await portfolioResponse.json();
       setAnalysis(result);
-      // Technical indicators power the visible holding cards and the same
-      // chart series is included in the portfolio-analysis request.
-      const historyByHolding = await Promise.all(loadedHoldings.map(async (holding) => [holding.id, await loadHistory(holding, auth)] as const));
-      const historiesForAnalysis = Object.fromEntries(historyByHolding);
-      const riskResponse = await fetch(`${API_URL}/api/analysis/risk-profile`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ holdings: loadedHoldings.map((holding, index) => ({ ticker: holding.symbol, quantity: holding.quantity, buy_price: holding.buy_price, current_price: result.positions?.[index]?.quote?.price ?? holding.buy_price, historical_prices: historiesForAnalysis[holding.id]?.data ?? [], market_data_as_of: historiesForAnalysis[holding.id]?.asOf ?? result.positions?.[index]?.quote?.as_of })), include_llm_insight: true }) });
-      if (riskResponse.ok) setRiskReport(await riskResponse.json()); else if (riskResponse.status === 503) { setRiskReport(null); setMessage("AI analysis is temporarily unavailable. Please retry."); }
+      await Promise.all(loadedHoldings.map(async (holding) => [holding.id, await loadHistory(holding, auth)] as const));
       window.sessionStorage.setItem("portfolio-analysis", JSON.stringify(result));
     }
   }

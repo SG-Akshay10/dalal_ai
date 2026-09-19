@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./ai-analysis.module.css";
 
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
@@ -29,7 +29,7 @@ export default function AiAnalysisPage() {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState("");
   const [reportLoaded, setReportLoaded] = useState(false);
-
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   async function token() {
     const response = await fetch("/api/auth/token");
@@ -52,14 +52,28 @@ export default function AiAnalysisPage() {
     void loadHoldings();
   }, []);
 
+  function killAnalysis() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setReportBusy(false);
+    setReportError("Analysis process killed by user.");
+  }
+
   async function runFullAnalysis() {
     if (!holdings.length) return;
     setReportBusy(true);
     setReportError("");
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const auth = await token();
     if (!auth) {
       setReportError("Your session has expired. Please sign in again.");
       setReportBusy(false);
+      abortControllerRef.current = null;
       return;
     }
     const headers = { Authorization: `Bearer ${auth}` };
@@ -76,9 +90,11 @@ export default function AiAnalysisPage() {
           })),
           include_llm_insight: true,
         }),
+        signal: controller.signal,
       });
       if (response.ok) {
         setRiskReport(await response.json());
+        setReportLoaded(true);
       } else if (response.status === 503) {
         setRiskReport(null);
         setReportError("AI analysis is temporarily unavailable. Please retry.");
@@ -86,11 +102,16 @@ export default function AiAnalysisPage() {
         setRiskReport(null);
         setReportError("Could not generate AI analysis. Please try again.");
       }
-    } catch {
-      setReportError("Could not reach the analysis service. Please try again.");
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setReportError("Analysis process killed by user.");
+      } else {
+        setReportError("Could not reach the analysis service. Please try again.");
+      }
+    } finally {
+      setReportBusy(false);
+      abortControllerRef.current = null;
     }
-    setReportBusy(false);
-    setReportLoaded(true);
   }
 
   return (
@@ -114,17 +135,29 @@ export default function AiAnalysisPage() {
                     ? "Report generated from your current holdings, allocation, and market data."
                     : "Generate a sector, stock, and diversification report based on your current holdings."}
                 </p>
-                <button className="btn" onClick={runFullAnalysis} disabled={reportBusy}>
-                  {reportBusy ? "Analyzing…" : riskReport ? "Re-run full analysis" : "Run full analysis"}
-                </button>
+                <div className={styles.buttonGroup}>
+                  <button className="btn" onClick={runFullAnalysis} disabled={reportBusy}>
+                    {reportBusy ? "Analyzing…" : riskReport ? "Re-run full analysis" : "Run full analysis"}
+                  </button>
+                  {reportBusy && (
+                    <button type="button" className="btn btnDanger" onClick={killAnalysis}>
+                      Kill Analysis
+                    </button>
+                  )}
+                </div>
               </div>
 
               {reportError && <p className={styles.errorText}>{reportError}</p>}
 
               {reportBusy && (
                 <div className={styles.loadingState}>
-                  <span className={styles.spinner} />
-                  Crunching sector, risk, and diversification insights…
+                  <div className={styles.loadingInfo}>
+                    <span className={styles.spinner} />
+                    <span>Crunching sector, risk, and diversification insights…</span>
+                  </div>
+                  <button type="button" className="btn btnDanger" onClick={killAnalysis}>
+                    Kill Analysis
+                  </button>
                 </div>
               )}
 

@@ -111,16 +111,29 @@
   background: var(--bg-soft);
 }
 
-.loadingState {
+.buttonGroup {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 1.5rem;
+}
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
   border-radius: 12px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.loadingInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .spinner {
