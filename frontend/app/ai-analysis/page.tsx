@@ -1,9 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./ai-analysis.module.css";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
 type Holding = { id: string; symbol: string; company_name: string; quantity?: number; buy_price?: number; exchange: string };
 type Position = { holding: Holding; invested_amount: number; current_amount?: number | null; quote?: { price?: number }; sector?: string | null };
 type PortfolioAnalysis = { positions: Position[] };
@@ -22,17 +21,7 @@ type RiskReport = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const STARTER_PROMPTS = [
-  "How diversified is my portfolio?",
-  "What are the biggest risks in my holdings?",
-  "Explain RSI and how to read it.",
-];
-
-type Tab = "full" | "chat";
-
 export default function AiAnalysisPage() {
-  const [tab, setTab] = useState<Tab>("full");
-
   // ---- Full analysis state ----
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null);
@@ -41,22 +30,6 @@ export default function AiAnalysisPage() {
   const [reportError, setReportError] = useState("");
   const [reportLoaded, setReportLoaded] = useState(false);
 
-  // ---- Chat state ----
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content:
-        "Hi! I'm your dalal.ai portfolio assistant. Ask me about your holdings, sector allocation, risk, or general market concepts. I provide educational insights only — never investment advice.",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
-  const [chatError, setChatError] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, chatBusy]);
 
   async function token() {
     const response = await fetch("/api/auth/token");
@@ -120,83 +93,17 @@ export default function AiAnalysisPage() {
     setReportLoaded(true);
   }
 
-  async function sendMessage(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || chatBusy) return;
-    setChatError("");
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
-    setMessages(nextMessages);
-    setInput("");
-    setChatBusy(true);
-
-    const auth = await token();
-    if (!auth) {
-      setChatError("Your session has expired. Please sign in again.");
-      setChatBusy(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/api/analysis/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth}` },
-        body: JSON.stringify({
-          message: trimmed,
-          history: nextMessages.slice(0, -1).map((message) => ({ role: message.role, content: message.content })),
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMessages((current) => [...current, { role: "assistant", content: data.reply }]);
-      } else if (response.status === 503) {
-        setChatError("AI chat is temporarily unavailable. Please retry.");
-      } else {
-        setChatError("Could not get a response. Please try again.");
-      }
-    } catch {
-      setChatError("Could not reach the AI assistant. Please try again.");
-    }
-    setChatBusy(false);
-  }
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    void sendMessage(input);
-  }
-
   return (
     <div className={styles.wrapper}>
       <header className={styles.header}>
         <div className={styles.eyebrow}>AI ANALYSIS</div>
         <h1 className={styles.title}>Your AI portfolio companion</h1>
         <p className={styles.subtitle}>
-          Get a full AI-generated portfolio report, or ask direct questions about your holdings. Educational insights only — never investment advice.
+          Get a full AI-generated portfolio report based on your holdings. Educational insights only — never investment advice.
         </p>
       </header>
 
-      <div className={styles.tabBar} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "full"}
-          className={tab === "full" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("full")}
-        >
-          <span className={styles.tabIcon}>📊</span> Full analysis
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "chat"}
-          className={tab === "chat" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("chat")}
-        >
-          <span className={styles.tabIcon}>💬</span> Ask questions
-        </button>
-      </div>
-
-      {tab === "full" && (
-        <section className={styles.fullPanel}>
+      <section className={styles.fullPanel}>
           {holdings.length === 0 ? (
             <div className={styles.emptyState}>Add holdings from the dashboard to generate a full AI analysis.</div>
           ) : (
@@ -351,53 +258,6 @@ export default function AiAnalysisPage() {
             </>
           )}
         </section>
-      )}
-
-      {tab === "chat" && (
-        <div className={styles.chatCard}>
-          <div className={styles.messages} ref={scrollRef}>
-            {messages.map((message, index) => (
-              <div key={index} className={message.role === "user" ? styles.userBubbleRow : styles.assistantBubbleRow}>
-                <div className={message.role === "user" ? styles.userBubble : styles.assistantBubble}>{message.content}</div>
-              </div>
-            ))}
-            {chatBusy && (
-              <div className={styles.assistantBubbleRow}>
-                <div className={styles.assistantBubble}>
-                  <span className={styles.typingDot} />
-                  <span className={styles.typingDot} />
-                  <span className={styles.typingDot} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {messages.length <= 1 && (
-            <div className={styles.starterRow}>
-              {STARTER_PROMPTS.map((prompt) => (
-                <button key={prompt} type="button" className={styles.starterChip} onClick={() => void sendMessage(prompt)} disabled={chatBusy}>
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {chatError && <p className={styles.errorText}>{chatError}</p>}
-
-          <form className={styles.inputRow} onSubmit={handleSubmit}>
-            <input
-              className={styles.input}
-              placeholder="Ask about your portfolio…"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              disabled={chatBusy}
-            />
-            <button className="btn" type="submit" disabled={chatBusy || !input.trim()}>
-              {chatBusy ? "Thinking…" : "Send"}
-            </button>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

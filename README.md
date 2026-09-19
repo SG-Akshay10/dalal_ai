@@ -156,6 +156,61 @@ uvicorn app.main:app --reload    # Runs on http://localhost:8000
 
 ---
 
+## Docker & Deployment
+
+### Running with Docker (Unified Container)
+
+A unified `Dockerfile` is provided that builds the Next.js frontend in standalone mode and packages it together with the FastAPI backend using `supervisord`.
+
+#### 1. Build and run locally with Docker Compose
+
+```bash
+# Build and run container
+docker compose up --build
+```
+
+#### 2. Build and run manually with Docker CLI
+
+```bash
+# Copy root environment example to .env
+cp .env.example .env
+# Edit .env and fill in your Supabase & AUTH_SECRET values
+
+# Build and run container (use sudo if user is not in docker group)
+sudo docker build -t dalal-ai .
+sudo docker run -p 3000:3000 -p 8000:8000 --env-file .env dalal-ai
+```
+
+---
+
+## Vercel Deployment Guide
+
+### Option 1: Frontend on Vercel + Backend on Docker Cloud (Recommended)
+
+Vercel natively excels at hosting Next.js applications, while Docker containers with dual background processes (Next.js + FastAPI) are best run on container platforms like **Render**, **Fly.io**, or **AWS ECS/App Runner**.
+
+1. **Deploy Backend to Container Service (Render / Fly.io / Railway)**:
+   - Deploy this Docker container or backend folder.
+   - Set environment variables (`AUTH_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`).
+   - Copy your public backend service URL (e.g. `https://dalal-backend.onrender.com`).
+
+2. **Deploy Frontend to Vercel**:
+   - Push your project to GitHub.
+   - Import project into Vercel and select root directory `frontend`.
+   - Set Vercel Environment Variables:
+     - `NEXT_PUBLIC_API_URL`: Your deployed backend URL.
+     - `AUTH_SECRET`: Same secret as backend.
+     - `NEXTAUTH_URL`: Your Vercel domain (e.g. `https://your-app.vercel.app`).
+     - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Option 2: Deploying Docker Container directly on Vercel
+
+If you wish to deploy a containerized deployment setup:
+- Vercel focus is on Serverless and Frontend deployments. For hosting custom Docker containers, use **Vercel Web Analytics / Serverless Functions** or pair Vercel with Docker on **Fly.io** / **Render**.
+- If deploying Next.js standalone container to Vercel using Docker, use the **Vercel CLI** or connect your GitHub repository and point your build target accordingly.
+
+---
+
 ## API Endpoints
 
 ### FastAPI (port 8000)

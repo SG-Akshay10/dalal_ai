@@ -108,8 +108,9 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   async function loadHistory(holding: Holding, auth?: string): Promise<LoadedHistory | undefined> {
-    if (histories[holding.id]?.data) return { data: histories[holding.id].data, asOf: histories[holding.id].asOf };
-    if (histories[holding.id]?.loading) return undefined;
+    const existing = histories[holding.id];
+    if (existing?.data) return { data: existing.data, asOf: existing.asOf };
+    if (existing?.loading) return undefined;
     setHistories((current) => ({ ...current, [holding.id]: { ...current[holding.id], loading: true } }));
     try {
       const accessToken = auth ?? await token();
@@ -205,7 +206,7 @@ export default function DashboardPage() {
   const quoteSources = analysis ? Array.from(new Set(analysis.positions.map((position) => position.quote?.source).filter(Boolean))) : [];
   return <div className={styles.wrapper}>
     <div className={styles.disclaimerBanner}>Insights only · Prices may be delayed · This tool never recommends buying or selling.</div>
-    <header className={styles.header}><div><div className={styles.eyebrow}>DALAL.AI INTELLIGENCE</div><h1 className={styles.title}>See your portfolio clearly.</h1><p className={styles.subtitle}>Add every holding, then get one market-price snapshot across your entire portfolio.</p></div>{holdings.length > 0 && <Link href="/ai-analysis" className={styles.aiCta}><span className={styles.aiCtaIcon}>✦</span><span><strong>Get AI insights</strong><small>Full analysis &amp; chat about your portfolio</small></span></Link>}</header>
+    <header className={styles.header}><div><div className={styles.eyebrow}>DALAL.AI INTELLIGENCE</div><h1 className={styles.title}>See your portfolio clearly.</h1><p className={styles.subtitle}>Add every holding, then get one market-price snapshot across your entire portfolio.</p></div>{holdings.length > 0 && <Link href="/ai-analysis" className={styles.aiCta}><span className={styles.aiCtaIcon}>✦</span><span><strong>Get AI insights</strong><small>Full analysis of your portfolio</small></span></Link>}</header>
     <section className={`${styles.panel} ${!isAddPanelOpen ? styles.panelCollapsed : ""}`}><div className={styles.sectionIntro}><div><h2 className={styles.panelTitle}>Add holdings</h2>{isAddPanelOpen && <p className={styles.helper}>Use your average buy price and total quantity for each stock.</p>}</div>{holdings.length > 0 && <button type="button" className={styles.panelToggle} aria-expanded={isAddPanelOpen} aria-controls="add-holdings-controls" onClick={() => setIsAddPanelOpen((open) => !open)}>{isAddPanelOpen ? "Hide input" : "Add holdings"}<span aria-hidden="true">{isAddPanelOpen ? "⌃" : "＋"}</span></button>}</div>
       {isAddPanelOpen && <div id="add-holdings-controls">
       <form className={styles.quickAddForm} onSubmit={addManual}><input className={styles.symbolInput} placeholder="Symbol (e.g. INFY)" value={symbol} onChange={(e) => setSymbol(e.target.value)} required /><input className={styles.numberInput} type="number" min="0" step="any" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} required /><input className={styles.numberInput} type="number" min="0" step="any" placeholder="Avg price ₹" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} required /><button className="btn" disabled={busy === "adding"}>{busy === "adding" ? "Adding…" : "Add holding"}</button></form>
