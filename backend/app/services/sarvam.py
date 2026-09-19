@@ -191,6 +191,41 @@ def summarize_portfolio_risk(stock_profiles: List[Dict[str, Any]], sector_profil
         return None
 
 
+def sanitize_payload(payload: Any, max_string_len: int = 4000, max_list_items: int = 50) -> Any:
+    """Recursively prunes/truncates raw or excessive data structures from payloads."""
+    if isinstance(payload, str):
+        if len(payload) > max_string_len:
+            return payload[:max_string_len] + "... [truncated]"
+        return payload
+    elif isinstance(payload, list):
+        return [sanitize_payload(item, max_string_len, max_list_items) for item in payload[:max_list_items]]
+    elif isinstance(payload, dict):
+        filtered = {}
+        for k, v in payload.items():
+            if k in ("historical_prices", "raw_bars", "price_history"):
+                continue
+            filtered[k] = sanitize_payload(v, max_string_len, max_list_items)
+        return filtered
+    return payload
+
+
+def ensure_context_budget(instructions: str, user_content_str: str, max_tokens: int = 2800, max_context: int = 128000) -> str:
+    """Ensures prompt_tokens + max_tokens stays strictly within the Sarvam context window budget."""
+    safety_buffer_tokens = 4000
+    max_prompt_tokens = max_context - max_tokens - safety_buffer_tokens
+    max_prompt_chars = int(max_prompt_tokens * 3.5)
+
+    total_len = len(instructions) + len(user_content_str)
+    if total_len > max_prompt_chars:
+        allowed_user_chars = max(1000, max_prompt_chars - len(instructions))
+        logger.warning(
+            f"Sarvam prompt size ({total_len} chars, est. {int(total_len / 3.5)} tokens) "
+            f"exceeds safety budget. Truncating payload to {allowed_user_chars} chars."
+        )
+        user_content_str = user_content_str[:allowed_user_chars] + "\n... [Payload truncated to fit Sarvam context window]"
+    return user_content_str
+
+
 def structured_completion(system_prompt: str, user_payload: Dict[str, Any], output_model: Type[T], correction: str | None = None, max_tokens: int = 1800) -> T:
     """Use the existing Sarvam HTTP client for Pydantic-validated JSON output."""
     api_key = os.getenv("SARVAM_API_KEY", "") or SARVAM_API_KEY
@@ -200,10 +235,24 @@ def structured_completion(system_prompt: str, user_payload: Dict[str, Any], outp
     instructions = f"{system_prompt}\nReturn ONLY a valid JSON object matching this schema: {json.dumps(schema)}"
     if correction:
         instructions += f"\nCorrect the prior output using this validation feedback: {correction}"
+    sanitized_payload = sanitize_payload(user_payload)
+    user_json_str = ensure_context_budget(instructions, json.dumps(sanitized_payload, default=str), max_tokens=max_tokens)
     try:
         # The portfolio schemas are materially larger than news summaries and
         # sarvam-105b can take longer than one minute to return valid JSON.
-        response = httpx.post(SARVAM_ENDPOINT, headers={"api-subscription-key": api_key, "Content-Type": "application/json"}, json={"model": MODEL_NAME, "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": json.dumps(user_payload, default=str)}], "max_tokens": max_tokens}, timeout=180.0)
+        response = httpx.post(
+            SARVAM_ENDPOINT,
+            headers={"api-subscription-key": api_key, "Content-Type": "application/json"},
+            json={
+                "model": MODEL_NAME,
+                "messages": [
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": user_json_str}
+                ],
+                "max_tokens": max_tokens
+            },
+            timeout=180.0
+        )
         response.raise_for_status()
         message = ((response.json().get("choices") or [{}])[0].get("message") or {})
         # Sarvam can return structured output in reasoning_content for some
@@ -232,8 +281,22 @@ def text_completion(system_prompt: str, user_payload: Dict[str, Any], max_tokens
     api_key = os.getenv("SARVAM_API_KEY", "") or SARVAM_API_KEY
     if not api_key:
         raise SarvamStructuredOutputError("SARVAM_API_KEY is not configured")
+    sanitized_payload = sanitize_payload(user_payload)
+    user_json_str = ensure_context_budget(system_prompt, json.dumps(sanitized_payload, default=str), max_tokens=max_tokens)
     try:
-        response = httpx.post(SARVAM_ENDPOINT, headers={"api-subscription-key": api_key, "Content-Type": "application/json"}, json={"model": MODEL_NAME, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": json.dumps(user_payload, default=str)}], "max_tokens": max_tokens}, timeout=180.0)
+        response = httpx.post(
+            SARVAM_ENDPOINT,
+            headers={"api-subscription-key": api_key, "Content-Type": "application/json"},
+            json={
+                "model": MODEL_NAME,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_json_str}
+                ],
+                "max_tokens": max_tokens
+            },
+            timeout=180.0
+        )
         response.raise_for_status()
         message = ((response.json().get("choices") or [{}])[0].get("message") or {})
         text = (message.get("content") or message.get("reasoning_content") or "").strip()
@@ -247,4 +310,5 @@ def text_completion(system_prompt: str, user_payload: Dict[str, Any], max_tokens
     except (httpx.HTTPError, ValueError) as exc:
         logger.error("Sarvam API text completion error: %s", exc)
         raise SarvamStructuredOutputError(str(exc)) from exc
+
 

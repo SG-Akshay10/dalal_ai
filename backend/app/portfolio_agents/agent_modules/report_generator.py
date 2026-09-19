@@ -30,6 +30,25 @@ class ReportGeneratorAgent:
         dominant_text = f"{dominant.sector} represents {dominant.allocation_pct:.1f}% of measured value, creating a concentration risk." if dominant else "Sector allocation could not be fully measured from available prices."
         return f"Sector concentration\n{dominant_text} The portfolio should be reviewed for unintended single-sector exposure and data classification gaps.\n\nRisk profile\nOverall risk is {risk.portfolio_risk_level.lower() if risk else 'elevated'}, with {high_risk} holding(s) flagged at high severity.\n\nDiversification and next steps\nExposure is limited in several areas, including {missing}. Review sector weights and document personal risk limits before making any allocation decision. This is educational analysis, not investment advice."
 
+    @staticmethod
+    def _prune(obj: Any) -> Any:
+        if obj is None:
+            return None
+        dump = obj.model_dump() if hasattr(obj, "model_dump") else obj
+        if isinstance(dump, dict):
+            pruned = {}
+            for k, v in dump.items():
+                if k in ("evidence", "historical_prices", "raw_bars", "price_history"):
+                    continue
+                if isinstance(v, list):
+                    pruned[k] = [ReportGeneratorAgent._prune(item) for item in v[:20]]
+                elif isinstance(v, dict):
+                    pruned[k] = ReportGeneratorAgent._prune(v)
+                else:
+                    pruned[k] = v
+            return pruned
+        return dump
+
     def run(self, state: PortfolioState, correction: str | None = None) -> AgentResult:
         detailed = len(state.enriched_holdings) <= STOCK_LEVEL_ANALYSIS_LIMIT
         holding_summaries = [
@@ -48,23 +67,23 @@ class ReportGeneratorAgent:
             for item in state.enriched_holdings
         ] if detailed else []
 
-        synthesis_dump = state.report.synthesis.model_dump() if (state.report and state.report.synthesis) else None
+        synthesis_dump = self._prune(state.report.synthesis) if (state.report and state.report.synthesis) else None
 
         payload = {
             "portfolio_size": len(state.enriched_holdings),
             "holdings": holding_summaries,
-            "sector_analysis": state.sector_analysis.model_dump() if state.sector_analysis else None,
-            "asset_analysis": state.asset_analysis.model_dump() if detailed and state.asset_analysis else None,
-            "technical_analysis": state.technical_analysis.model_dump() if detailed and state.technical_analysis else None,
-            "risk_analysis": state.risk_analysis.model_dump() if state.risk_analysis else None,
-            "stock_thesis": state.stock_thesis.model_dump() if state.stock_thesis else None,
-            "sector_thesis": state.sector_thesis.model_dump() if state.sector_thesis else None,
-            "fundamental_analysis": state.fundamental_analysis.model_dump() if state.fundamental_analysis else None,
-            "valuation_analysis": state.valuation_analysis.model_dump() if state.valuation_analysis else None,
-            "market_context_analysis": state.market_context_analysis.model_dump() if state.market_context_analysis else None,
-            "scenario_analysis": state.scenario_analysis.model_dump() if state.scenario_analysis else None,
+            "sector_analysis": self._prune(state.sector_analysis),
+            "asset_analysis": self._prune(state.asset_analysis) if detailed else None,
+            "technical_analysis": self._prune(state.technical_analysis) if detailed else None,
+            "risk_analysis": self._prune(state.risk_analysis),
+            "stock_thesis": self._prune(state.stock_thesis),
+            "sector_thesis": self._prune(state.sector_thesis),
+            "fundamental_analysis": self._prune(state.fundamental_analysis),
+            "valuation_analysis": self._prune(state.valuation_analysis),
+            "market_context_analysis": self._prune(state.market_context_analysis),
+            "scenario_analysis": self._prune(state.scenario_analysis),
             "synthesis": synthesis_dump,
-            "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7],
+            "evidence": [item.model_dump() for item in state.evidence if item.verified and item.quality_score >= 0.7][:10],
             "data_errors": [error for item in state.enriched_holdings for error in item.data_errors],
         }
 
@@ -74,6 +93,7 @@ class ReportGeneratorAgent:
 
         report = build_executive_report_data(state, narrative)
         return {"report": report}
+
 
 
 agent = ReportGeneratorAgent()
