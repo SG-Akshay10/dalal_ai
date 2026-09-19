@@ -57,6 +57,22 @@ class PortfolioRiskRequest(BaseModel):
     minimum_allocation_pct: float = Field(default=5, ge=0, le=100)
 
 
+@router.get("/analysis/risk-profile")
+def get_cached_risk_profile(user: dict = Depends(get_current_user)):
+    """Return the cached AI analysis report generated within the last 24 hours if available."""
+    uid = user_id(user)
+    now = time.time()
+    with _RISK_REPORT_CACHE_LOCK:
+        for key, (expires_at, payload) in _RISK_REPORT_CACHE.items():
+            if key.startswith(f"{RISK_REPORT_CACHE_VERSION}:{uid}:") and expires_at > now:
+                cached_payload = dict(payload)
+                cached_payload["analysis_cached"] = True
+                cached_payload["analysis_generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at - RISK_REPORT_CACHE_TTL_SECONDS))
+                cached_payload["analysis_refresh_after"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_at))
+                return cached_payload
+    return {"cached_report": None}
+
+
 @router.post("/analysis/risk-profile")
 def risk_profile(payload: PortfolioRiskRequest, user: dict = Depends(get_current_user)):
     """Produce stock, sector, and portfolio diversification JSON from raw holdings.

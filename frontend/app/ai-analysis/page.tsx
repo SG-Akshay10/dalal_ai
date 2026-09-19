@@ -40,12 +40,20 @@ export default function AiAnalysisPage() {
     const auth = await token();
     if (!auth) return;
     const headers = { Authorization: `Bearer ${auth}` };
-    const [holdingsResponse, portfolioResponse] = await Promise.all([
+    const [holdingsResponse, portfolioResponse, cachedRiskResponse] = await Promise.all([
       fetch(`${API_URL}/api/holdings`, { headers }),
       fetch(`${API_URL}/api/analysis/portfolio`, { headers }),
+      fetch(`${API_URL}/api/analysis/risk-profile`, { headers }),
     ]);
     if (holdingsResponse.ok) setHoldings(await holdingsResponse.json());
     if (portfolioResponse.ok) setAnalysis(await portfolioResponse.json());
+    if (cachedRiskResponse.ok) {
+      const cachedData = await cachedRiskResponse.json();
+      if (cachedData && cachedData.summary) {
+        setRiskReport(cachedData);
+        setReportLoaded(true);
+      }
+    }
   }
 
   useEffect(() => {
@@ -142,11 +150,6 @@ export default function AiAnalysisPage() {
                   <button className="btn" onClick={runFullAnalysis} disabled={reportBusy}>
                     {reportBusy ? "Analyzing…" : riskReport ? "Re-run full analysis" : "Run full analysis"}
                   </button>
-                  {reportBusy && (
-                    <button type="button" className="btn btnDanger" onClick={killAnalysis}>
-                      Kill Analysis
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -159,94 +162,147 @@ export default function AiAnalysisPage() {
                     <span>Crunching sector, risk, and diversification insights…</span>
                   </div>
                   <button type="button" className="btn btnDanger" onClick={killAnalysis}>
-                    Kill Analysis
+                    Stop Analysis
                   </button>
                 </div>
               )}
 
               {!reportBusy && riskReport && (
                 <div className={styles.aiPanel}>
-                  <div className={styles.eyebrowSmall}>PORTFOLIO REPORT</div>
-                  <h2>{riskReport.summary.diversification_verdict}</h2>
-                  <p className={styles.aiInsight}>
-                    {riskReport.summary.sarvam_insight || "Risk analysis is based on your holdings, allocation, and available market data."}
-                  </p>
-                  <div className={styles.aiGrid}>
+                  {/* Summary Banner */}
+                  <div className={styles.reportHeader}>
                     <div>
-                      <small>Overall risk</small>
-                      <strong>{riskReport.summary.portfolio_risk_level}</strong>
+                      <div className={styles.eyebrowSmall}>PORTFOLIO EXECUTIVE SUMMARY</div>
+                      <h2 className={styles.verdictTitle}>{riskReport.summary.diversification_verdict}</h2>
                     </div>
-                    <div>
-                      <small>Concentration flags</small>
-                      <strong>{riskReport.portfolio_diversification_analysis.concentration_flags.length || "None"}</strong>
-                    </div>
-                    <div>
-                      <small>Missing / low exposure</small>
-                      <strong>{riskReport.portfolio_diversification_analysis.under_exposed_or_missing_sectors.length}</strong>
+                    <div className={styles.riskBadgeWrapper}>
+                      <span className={styles.riskBadgeLabel}>Portfolio Risk</span>
+                      <span className={styles.riskBadge}>
+                        {riskReport.summary.portfolio_risk_level}
+                      </span>
                     </div>
                   </div>
 
+                  <p className={styles.aiInsight}>
+                    {riskReport.summary.sarvam_insight || "Risk analysis is based on your holdings, allocation, and available market data."}
+                  </p>
+
+                  {/* Top Stats Cards */}
+                  <div className={styles.aiGrid}>
+                    <div className={styles.statCard}>
+                      <span className={styles.statLabel}>Overall Risk Rating</span>
+                      <span className={styles.statValue}>{riskReport.summary.portfolio_risk_level}</span>
+                    </div>
+                    <div className={styles.statCard}>
+                      <span className={styles.statLabel}>Concentration Flags</span>
+                      <span className={styles.statValue}>
+                        {riskReport.portfolio_diversification_analysis.concentration_flags.length || "0"} detected
+                      </span>
+                    </div>
+                    <div className={styles.statCard}>
+                      <span className={styles.statLabel}>Missing / Under-Exposed</span>
+                      <span className={styles.statValue}>
+                        {riskReport.portfolio_diversification_analysis.under_exposed_or_missing_sectors.length} sectors
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Executive Analysis */}
                   {riskReport.executive_report && (
-                    <div className={styles.aiNarrative}>
-                      <h3>Sector outlook</h3>
-                      <p>{riskReport.executive_report.sector_commentary}</p>
-                      {riskReport.executive_report.asset_commentary && (
-                        <>
-                          <h3>Asset analysis</h3>
-                          <p>{riskReport.executive_report.asset_commentary}</p>
-                        </>
+                    <div className={styles.sectionBlock}>
+                      <h3 className={styles.sectionHeading}>
+                        <span className={styles.icon}>📊</span> Executive Narrative &amp; Breakdown
+                      </h3>
+                      <div className={styles.narrativeGrid}>
+                        <div className={styles.narrativeCard}>
+                          <h4>Sector Outlook</h4>
+                          <p>{riskReport.executive_report.sector_commentary}</p>
+                        </div>
+                        {riskReport.executive_report.asset_commentary && (
+                          <div className={styles.narrativeCard}>
+                            <h4>Asset Analysis</h4>
+                            <p>{riskReport.executive_report.asset_commentary}</p>
+                          </div>
+                        )}
+                        <div className={styles.narrativeCard}>
+                          <h4>Risk Diagnostics</h4>
+                          <p>{riskReport.executive_report.risk_commentary}</p>
+                        </div>
+                      </div>
+
+                      {riskReport.executive_report.recommendations && riskReport.executive_report.recommendations.length > 0 && (
+                        <div className={styles.recommendationsCard}>
+                          <h4>💡 Educational Action Points &amp; Next Steps</h4>
+                          <ul>
+                            {riskReport.executive_report.recommendations.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
-                      <h3>Risk diagnostics</h3>
-                      <p>{riskReport.executive_report.risk_commentary}</p>
-                      <h3>Educational next steps</h3>
-                      <ul>
-                        {riskReport.executive_report.recommendations.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
                     </div>
                   )}
 
+                  {/* Sector Macro Thesis */}
                   {riskReport.sector_thesis && riskReport.sector_thesis.findings.length > 0 && (
-                    <div className={styles.aiNarrative}>
-                      <h3>Why sectors are growing or not (policy, geopolitics, earnings)</h3>
-                      {riskReport.sector_thesis.findings.map((item) => (
-                        <div key={item.sector} className={styles.thesisBlock}>
-                          <h4>{item.sector}</h4>
-                          <p>{item.narrative}</p>
-                          <div className={styles.prosConsGrid}>
-                            <div>
-                              <small>Pros</small>
-                              {item.pros.map((pro) => (
-                                <span key={pro} className={styles.pro}>+ {pro}</span>
-                              ))}
+                    <div className={styles.sectionBlock}>
+                      <h3 className={styles.sectionHeading}>
+                        <span className={styles.icon}>🌐</span> Sector Micro &amp; Macro Thesis
+                      </h3>
+                      <div className={styles.sectorThesisList}>
+                        {riskReport.sector_thesis.findings.map((item) => (
+                          <div key={item.sector} className={styles.thesisBlock}>
+                            <div className={styles.thesisHeader}>
+                              <h4>{item.sector}</h4>
                             </div>
-                            <div>
-                              <small>Cons</small>
-                              {item.cons.map((con) => (
-                                <span key={con} className={styles.con}>− {con}</span>
-                              ))}
+                            <p className={styles.thesisNarrative}>{item.narrative}</p>
+                            <div className={styles.prosConsGrid}>
+                              <div className={styles.proBox}>
+                                <small className={styles.proLabel}>Growth Catalysts (Pros)</small>
+                                {item.pros.map((pro) => (
+                                  <div key={pro} className={styles.proItem}>
+                                    <span className={styles.proBullet}>✓</span> {pro}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className={styles.conBox}>
+                                <small className={styles.conLabel}>Key Risks &amp; Drag (Cons)</small>
+                                {item.cons.map((con) => (
+                                  <div key={con} className={styles.conItem}>
+                                    <span className={styles.conBullet}>✕</span> {con}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
 
+                  {/* Stock Level Thesis */}
                   {riskReport.stock_thesis && riskReport.stock_thesis.applicable && riskReport.stock_thesis.findings.length > 0 && (
-                    <div className={styles.aiNarrative}>
-                      <h3>Stock pros &amp; cons</h3>
+                    <div className={styles.sectionBlock}>
+                      <h3 className={styles.sectionHeading}>
+                        <span className={styles.icon}>🔍</span> Individual Stock Breakdown
+                      </h3>
                       <div className={styles.stockThesisGrid}>
                         {riskReport.stock_thesis.findings.map((item) => (
                           <div key={item.ticker} className={styles.stockThesisCard}>
-                            <strong>{item.ticker}</strong>
-                            <small>{item.sector}</small>
+                            <div className={styles.stockCardHeader}>
+                              <span className={styles.tickerBadge}>{item.ticker}</span>
+                              <span className={styles.stockSector}>{item.sector}</span>
+                            </div>
                             <div className={styles.stockThesisList}>
                               {item.pros.map((pro) => (
-                                <span key={pro} className={styles.pro}>+ {pro}</span>
+                                <div key={pro} className={styles.proItem}>
+                                  <span className={styles.proBullet}>+</span> {pro}
+                                </div>
                               ))}
                               {item.cons.map((con) => (
-                                <span key={con} className={styles.con}>− {con}</span>
+                                <div key={con} className={styles.conItem}>
+                                  <span className={styles.conBullet}>−</span> {con}
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -259,32 +315,48 @@ export default function AiAnalysisPage() {
                     <p className={styles.helperText}>{riskReport.stock_thesis.reason_if_not_applicable}</p>
                   )}
 
-                  <div className={styles.aiColumns}>
-                    <div>
-                      <h3>Sector allocation</h3>
-                      {riskReport.portfolio_diversification_analysis.sector_allocation.map((item) => (
-                        <div className={styles.aiRow} key={item.sector}>
-                          <span>{item.sector}</span>
-                          <strong>{item.allocation_pct.toFixed(1)}%</strong>
+                  {/* Allocation & Risk Table */}
+                  <div className={styles.sectionBlock}>
+                    <h3 className={styles.sectionHeading}>
+                      <span className={styles.icon}>📈</span> Portfolio Structure &amp; Risk Profiles
+                    </h3>
+                    <div className={styles.aiColumns}>
+                      <div className={styles.columnBox}>
+                        <h4>Sector Allocation Breakdown</h4>
+                        <div className={styles.rowsList}>
+                          {riskReport.portfolio_diversification_analysis.sector_allocation.map((item) => (
+                            <div className={styles.aiRow} key={item.sector}>
+                              <span>{item.sector}</span>
+                              <strong className={styles.pctTag}>{item.allocation_pct.toFixed(1)}%</strong>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                    <div>
-                      <h3>Stock risk ratings</h3>
-                      {riskReport.stock_level_risk_profiles.map((item) => (
-                        <div className={styles.aiRow} key={item.ticker}>
-                          <span>
-                            {item.ticker} <small>{item.sector}</small>
-                          </span>
-                          <strong>{item.overall_risk_rating}</strong>
+                      </div>
+                      <div className={styles.columnBox}>
+                        <h4>Stock Risk Ratings</h4>
+                        <div className={styles.rowsList}>
+                          {riskReport.stock_level_risk_profiles.map((item) => (
+                            <div className={styles.aiRow} key={item.ticker}>
+                              <span>
+                                <strong>{item.ticker}</strong> <small>({item.sector})</small>
+                              </span>
+                              <span className={styles.ratingBadge}>{item.overall_risk_rating}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
                     </div>
+                    {riskReport.portfolio_diversification_analysis.under_exposed_or_missing_sectors?.length > 0 && (
+                      <div className={styles.aiMissingBox}>
+                        <span className={styles.missingTitle}>⚠️ Under-exposed or missing sectors:</span>
+                        <div className={styles.missingBadges}>
+                          {riskReport.portfolio_diversification_analysis.under_exposed_or_missing_sectors.map((sec) => (
+                            <span key={sec} className={styles.missingBadge}>{sec}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <p className={styles.aiMissing}>
-                    <b>Under-exposed or missing:</b>{" "}
-                    {riskReport.portfolio_diversification_analysis.under_exposed_or_missing_sectors.join(", ") || "None identified"}
-                  </p>
                 </div>
               )}
 
