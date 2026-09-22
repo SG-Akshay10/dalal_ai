@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pyjwt
+python-dotenv
+supabase
+httpx
+python-multipart
+pytest
+langgraph
+langchain-core

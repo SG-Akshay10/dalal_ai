@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.env.local
+.env
+
+# Env files (keep examples)
+backend/.env
+frontend/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+implemented.md
+prd.md
+
+
+# SQLite Databases
+*.db
+*.sqlite3
+backend/data/
+backend/portfolio_analysis_graph.png
+# Supabase
+supabase/

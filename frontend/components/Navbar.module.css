@@ -1,0 +1,164 @@
+/* ====================================================
+   Navbar Module CSS
+==================================================== */
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(1.25rem, 4vw, 4rem);
+  height: 72px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.brand:hover {
+  color: var(--accent-primary);
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.themeToggle {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.themeToggle svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.moonIcon { display: none; }
+
+:global(html[data-theme="dark"]) .sunIcon { display: none; }
+:global(html[data-theme="dark"]) .moonIcon { display: block; }
+
+.themeToggle:hover {
+  background: var(--bg-soft);
+  color: var(--text-primary);
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.avatar:hover,
+.avatar:focus-visible {
+  background: var(--accent-primary-hover);
+}
+
+.accountMenu {
+  position: relative;
+}
+
+.accountDropdown {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  min-width: 7rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--bg-base);
+  box-shadow: 0 0.6rem 1.5rem rgba(20, 28, 36, 0.12);
+}
+
+.link {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.link:hover {
+  color: var(--text-primary);
+  background: var(--bg-soft);
+}
+
+.linkPrimary {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  padding: 0.52rem 0.95rem;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  transition: background-color 0.2s;
+}
+
+.linkPrimary:hover {
+  background: var(--accent-primary-hover);
+}
+
+.logoutBtn {
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #9e3a32;
+  background: transparent;
+  border: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.4rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.logoutBtn:hover {
+  background: #f8e6e2;
+  color: #7d2d26;
+}
+
+@media (max-width: 560px) {
+  .nav { height: auto; min-height: 64px; padding-top: 0.8rem; padding-bottom: 0.8rem; gap: 0.8rem; }
+  .brand { font-size: 0.85rem; }
+  .links { gap: 0.45rem; }
+  .link, .linkPrimary, .logoutBtn { padding-left: 0.6rem; padding-right: 0.6rem; }
+}

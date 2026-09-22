@@ -1,0 +1,107 @@
+"""Normalized market-data, quality, and deterministic portfolio calculations.
+
+All agents should import from this package rather than from ``tools`` or
+individual sub-modules.  This is the single stable surface for:
+
+- Market-data enrichment and technical-indicator computation (``market``)
+- Fundamental metrics processing and evaluation (``fundamental``)
+- Portfolio-level deterministic calculations (``portfolio``)
+- Data-freshness and completeness metadata (``quality``)
+"""
+
+from .critic import (
+    evaluate_critic_rules,
+)
+from .fundamental import (
+    SECTOR_BENCHMARKS,
+    calculate_fundamental_health,
+    extract_fundamental_finding,
+    get_sector_benchmark,
+)
+from .market import (
+    calculate_technicals,
+    enrich_holding,
+    resolve_sector,
+)
+from .market_context import (
+    classify_movement_alignment,
+    evaluate_relative_strength,
+    extract_market_context_finding,
+    get_broad_market_benchmark,
+    get_sector_market_benchmark,
+)
+from .portfolio import (
+    allocation,
+    diversification_score,
+    missing_sectors,
+)
+from .quality import (
+    MARKET_DATA_MAX_AGE_SECONDS,
+    holding_quality,
+    market_data_is_fresh,
+)
+from .risk import (
+    extract_risk_finding,
+)
+from .scenario import (
+    build_scenario_analysis,
+)
+from .valuation import (
+    SECTOR_VALUATION_BENCHMARKS,
+    calculate_growth_adjusted_valuation,
+    calculate_historical_valuation_range,
+    extract_valuation_finding,
+    get_sector_valuation_benchmark,
+)
+
+from .cache import AgentDataCache, global_data_cache
+from .context_pruner import (
+    get_pruned_synthesis_context,
+    prune_enriched_holding,
+    prune_holding_input,
+)
+
+__all__ = [
+    # caching & context pruning
+    "AgentDataCache",
+    "global_data_cache",
+    "get_pruned_synthesis_context",
+    "prune_enriched_holding",
+    "prune_holding_input",
+    # scenario analysis
+    "build_scenario_analysis",
+    # critic rules
+    "evaluate_critic_rules",
+    # fundamental calculations
+    "SECTOR_BENCHMARKS",
+    "calculate_fundamental_health",
+    "extract_fundamental_finding",
+    "get_sector_benchmark",
+    # risk calculations
+    "extract_risk_finding",
+    # valuation calculations
+    "SECTOR_VALUATION_BENCHMARKS",
+    "calculate_growth_adjusted_valuation",
+    "calculate_historical_valuation_range",
+    "extract_valuation_finding",
+    "get_sector_valuation_benchmark",
+    # market context calculations
+    "classify_movement_alignment",
+    "evaluate_relative_strength",
+    "extract_market_context_finding",
+    "get_broad_market_benchmark",
+    "get_sector_market_benchmark",
+    # market enrichment
+    "calculate_technicals",
+    "enrich_holding",
+    "resolve_sector",
+    # portfolio calculations
+    "allocation",
+    "diversification_score",
+    "missing_sectors",
+    # data quality
+    "MARKET_DATA_MAX_AGE_SECONDS",
+    "holding_quality",
+    "market_data_is_fresh",
+]
+
