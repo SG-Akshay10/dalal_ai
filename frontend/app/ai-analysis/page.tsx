@@ -36,27 +36,27 @@ export default function AiAnalysisPage() {
     return response.ok ? (await response.json()).token : null;
   }
 
-  async function loadHoldings() {
-    const auth = await token();
-    if (!auth) return;
-    const headers = { Authorization: `Bearer ${auth}` };
-    const [holdingsResponse, portfolioResponse, cachedRiskResponse] = await Promise.all([
-      fetch(`${API_URL}/api/holdings`, { headers }),
-      fetch(`${API_URL}/api/analysis/portfolio`, { headers }),
-      fetch(`${API_URL}/api/analysis/risk-profile`, { headers }),
-    ]);
-    if (holdingsResponse.ok) setHoldings(await holdingsResponse.json());
-    if (portfolioResponse.ok) setAnalysis(await portfolioResponse.json());
-    if (cachedRiskResponse.ok) {
-      const cachedData = await cachedRiskResponse.json();
-      if (cachedData && cachedData.summary) {
-        setRiskReport(cachedData);
-        setReportLoaded(true);
+  useEffect(() => {
+    async function loadHoldings() {
+      const auth = await token();
+      if (!auth) return;
+      const headers = { Authorization: `Bearer ${auth}` };
+      const [holdingsResponse, portfolioResponse, cachedRiskResponse] = await Promise.all([
+        fetch(`${API_URL}/api/holdings`, { headers }),
+        fetch(`${API_URL}/api/analysis/portfolio`, { headers }),
+        fetch(`${API_URL}/api/analysis/risk-profile`, { headers }),
+      ]);
+      if (holdingsResponse.ok) setHoldings(await holdingsResponse.json());
+      if (portfolioResponse.ok) setAnalysis(await portfolioResponse.json());
+      if (cachedRiskResponse.ok) {
+        const cachedData = await cachedRiskResponse.json();
+        if (cachedData && cachedData.summary) {
+          setRiskReport(cachedData);
+          setReportLoaded(true);
+        }
       }
     }
-  }
 
-  useEffect(() => {
     void loadHoldings();
   }, []);
 
@@ -113,8 +113,8 @@ export default function AiAnalysisPage() {
         setRiskReport(null);
         setReportError("Could not generate AI analysis. Please try again.");
       }
-    } catch (err: any) {
-      if (err?.name === "AbortError") {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
         setReportError("Analysis process killed by user.");
       } else {
         setReportError("Could not reach the analysis service. Please try again.");

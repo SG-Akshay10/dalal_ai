@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import PriceChart from "./PriceChart";
 import styles from "./dashboard.module.css";
@@ -59,7 +58,6 @@ function deriveIndicators(rows?: Candle[]): IndicatorSummary | undefined {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [symbol, setSymbol] = useState(""); const [quantity, setQuantity] = useState(""); const [buyPrice, setBuyPrice] = useState(""); const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<PortfolioAnalysis | null>(null); const [busy, setBusy] = useState(""); const [message, setMessage] = useState("");

@@ -1,6 +1,6 @@
 # dalal.ai
 
-> **Next.js 16 · NextAuth v5 · FastAPI · Supabase Postgres · Docker**
+> **Next.js 16 · NextAuth v5 · FastAPI · Supabase Postgres · Render · Vercel**
 
 A modern full-stack stock portfolio management app with AI-powered risk analysis. Built with a Next.js frontend, Python FastAPI backend, Supabase Postgres database, and LangGraph multi-agent analysis.
 
@@ -12,7 +12,7 @@ A modern full-stack stock portfolio management app with AI-powered risk analysis
 ┌─────────────────────────────────────────────────────────────┐
 │  Browser                                                    │
 │                                                             │
-│  Next.js (port 3000)                                        │
+│  Next.js on Vercel                                         │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │  NextAuth v5 (Credentials Provider)                 │   │
 │  │  • Issues signed JWT (HS256, AUTH_SECRET)           │   │
@@ -23,7 +23,7 @@ A modern full-stack stock portfolio management app with AI-powered risk analysis
           │ (service_role key)           │ (Bearer JWT)
           ▼                              ▼
 ┌──────────────────┐          ┌──────────────────────┐
-│  Supabase Postgres│         │  FastAPI (port 8000)  │
+│  Supabase Postgres│         │  FastAPI on Render    │
 │  • User accounts  │         │  • JWT verification  │
 │  • Holdings & Risk│◄────────│  • LangGraph agents  │
 └──────────────────┘          └──────────────────────┘
@@ -38,9 +38,8 @@ dalal.ai/
 ├── frontend/             # Next.js 16 App Router
 ├── backend/              # FastAPI Python service & LangGraph agents
 ├── supabase/             # SQL schema definitions
-├── Dockerfile            # Unified Docker container spec (supervisord)
-├── docker-compose.yml    # Docker Compose setup
-├── supervisord.conf      # Process management for Docker
+├── backend/Dockerfile    # Backend-only image for Render
+├── render.yaml           # Render backend service blueprint
 └── .env.example          # Environment variables template
 ```
 
@@ -50,12 +49,12 @@ dalal.ai/
 
 Before running the application, ensure you have installed:
 
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/)
 - A **Supabase** project (free tier — [create one here](https://supabase.com))
+- Node.js 20+ and Python 3.11+
 
 ---
 
-## ⚙️ Setup & Installation (Docker)
+## ⚙️ Setup & Installation
 
 ### 1. Database Setup
 
@@ -76,9 +75,9 @@ Edit `.env` and fill in your configuration:
 | Variable | Description |
 |---|---|
 | `AUTH_SECRET` | Secret key for JWT signing (generate using `npx auth secret`) |
-| `NEXTAUTH_URL` | Frontend URL (`http://localhost:3000`) |
-| `NEXT_PUBLIC_API_URL` | Backend URL (`http://localhost:8000`) |
-| `FRONTEND_URL` | Backend CORS allowed origin (`http://localhost:3000`) |
+| `NEXTAUTH_URL` | Frontend URL (`http://localhost:3000` locally, Vercel URL in production) |
+| `NEXT_PUBLIC_API_URL` | Backend URL (`http://localhost:8000` locally, Render URL in production) |
+| `FRONTEND_URL` | Backend CORS allowed origin (`http://localhost:3000` locally, Vercel URL in production) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
 | `SUPABASE_URL` | Supabase Project URL (backend) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Anonymous Key |
@@ -87,36 +86,24 @@ Edit `.env` and fill in your configuration:
 
 ---
 
-## 🐳 Running the Application
+## 🛠️ Running Locally
 
-### Option 1: Using Docker Compose (Recommended)
-
-Build and launch the application in a single command:
+Start the backend:
 
 ```bash
-docker compose up --build
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Access the application:
-- **Frontend App**: [http://localhost:3000](http://localhost:3000)
-- **FastAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Backend Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-
-To stop the containers:
+In a second terminal, start the frontend:
 
 ```bash
-docker compose down
+cd frontend
+npm install
+npm run dev
 ```
 
-### Option 2: Using Docker CLI Directly
-
-```bash
-# Build the container image
-docker build -t dalal-ai .
-
-# Run the container using your .env file
-docker run -p 3000:3000 -p 8000:8000 --env-file .env dalal-ai
-```
+The frontend is available at [http://localhost:3000](http://localhost:3000), and the API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ---
 
@@ -141,31 +128,24 @@ docker run -p 3000:3000 -p 8000:8000 --env-file .env dalal-ai
 
 ---
 
-## Vercel Deployment Guide
+## 🚀 Deployment
 
-### Option 1: Frontend on Vercel + Backend on Docker Cloud (Recommended)
+### Backend on Render
 
-Vercel natively excels at hosting Next.js applications, while Docker containers with dual background processes (Next.js + FastAPI) are best run on container platforms like **Render**, **Fly.io**, or **AWS ECS/App Runner**.
+The repository includes [`render.yaml`](./render.yaml), which configures Render to build only [`backend/Dockerfile`](./backend/Dockerfile) and serve FastAPI on Render's `$PORT`.
 
-1. **Deploy Backend to Container Service (Render / Fly.io / Railway)**:
-   - Deploy this Docker container or backend folder.
-   - Set environment variables (`AUTH_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`).
-   - Copy your public backend service URL (e.g. `https://dalal-backend.onrender.com`).
+1. Create a Render Blueprint from this repository, or create a Docker Web Service with root directory `backend` and Dockerfile path `Dockerfile`.
+2. Set `AUTH_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FRONTEND_URL` in Render. Add `SARVAM_API_KEY` if AI analysis is enabled.
+3. Copy the resulting service URL, such as `https://dalal-backend.onrender.com`.
 
-2. **Deploy Frontend to Vercel**:
-   - Push your project to GitHub.
-   - Import project into Vercel and select root directory `frontend`.
-   - Set Vercel Environment Variables:
-     - `NEXT_PUBLIC_API_URL`: Your deployed backend URL.
-     - `AUTH_SECRET`: Same secret as backend.
-     - `NEXTAUTH_URL`: Your Vercel domain (e.g. `https://your-app.vercel.app`).
-     - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+### Frontend on Vercel
 
-### Option 2: Deploying Docker Container directly on Vercel
+1. Import this repository into Vercel and set the project root directory to `frontend`.
+2. Set `AUTH_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+3. Set `NEXT_PUBLIC_API_URL` to the Render backend URL and set `NEXTAUTH_URL` to the Vercel production URL.
+4. Set Render's `FRONTEND_URL` to the same Vercel URL so browser requests pass CORS checks.
 
-If you wish to deploy a containerized deployment setup:
-- Vercel focus is on Serverless and Frontend deployments. For hosting custom Docker containers, use **Vercel Web Analytics / Serverless Functions** or pair Vercel with Docker on **Fly.io** / **Render**.
-- If deploying Next.js standalone container to Vercel using Docker, use the **Vercel CLI** or connect your GitHub repository and point your build target accordingly.
+The frontend and backend must use the same `AUTH_SECRET`.
 
 ---
 
