@@ -11,7 +11,7 @@ import math
 import re
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, Optional
 
 import httpx
@@ -23,6 +23,12 @@ except ImportError:  # pragma: no cover - depends on deployment environment
 
 
 YAHOO_HEADERS = {"User-Agent": "dalal.ai/1.0"}
+NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-IN,en;q=0.9",
+    "Referer": "https://www.nseindia.com/",
+}
 _cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = threading.Lock()
 _cache_key_locks: dict[str, threading.Lock] = {}
@@ -115,6 +121,62 @@ def _get(path: str, params: dict[str, Any], timeout: float = 8.0) -> dict[str, A
             return response.json()
         time.sleep(_retry_delay(response, attempt))
     raise RuntimeError("Yahoo request retry loop exited unexpectedly")  # pragma: no cover
+
+
+def _nse_eod_rows(symbol: str, days: int) -> list[dict[str, Any]]:
+    """Fetch daily NSE OHLCV rows from its security-wise EOD archive.
+
+    NSE serves this browser-facing archive in one-year windows. Priming the
+    session obtains the cookies expected by the archive endpoint; no Yahoo
+    chart data is used here.
+    """
+    end = date.today()
+    start = end - timedelta(days=days)
+    chunks: list[tuple[date, date]] = []
+    cursor = start
+    while cursor <= end:
+        chunk_end = min(cursor + timedelta(days=364), end)
+        chunks.append((cursor, chunk_end))
+        cursor = chunk_end + timedelta(days=1)
+    records: list[dict[str, Any]] = []
+    with httpx.Client(headers=NSE_HEADERS, timeout=12.0, follow_redirects=True) as client:
+        client.get("https://www.nseindia.com/").raise_for_status()
+        for chunk_start, chunk_end in chunks:
+            response = client.get(
+                "https://www.nseindia.com/api/historical/securityArchives",
+                params={"from": chunk_start.strftime("%d-%m-%Y"), "to": chunk_end.strftime("%d-%m-%Y"),
+                        "symbol": symbol, "dataType": "priceVolumeDeliverable", "series": "EQ"},
+            )
+            response.raise_for_status()
+            records.extend(response.json().get("data") or [])
+
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records:
+        try:
+            day = datetime.strptime(str(record.get("CH_TIMESTAMP", "")), "%d-%b-%Y").date().isoformat()
+        except ValueError:
+            continue
+        if day in seen:
+            continue
+        close = _finite(record.get("CH_CLOSING_PRICE"))
+        if close is None:
+            continue
+        seen.add(day)
+        open_price = _finite(record.get("CH_OPENING_PRICE")) or close
+        high = _finite(record.get("CH_TRADE_HIGH_PRICE")) or max(open_price, close)
+        low = _finite(record.get("CH_TRADE_LOW_PRICE")) or min(open_price, close)
+        rows.append({"time": day, "open": open_price, "high": max(high, open_price, close),
+                     "low": min(low, open_price, close), "close": close,
+                     "volume": _finite(record.get("CH_TOT_TRADED_QTY")) or 0})
+    rows.sort(key=lambda row: row["time"])
+    if not rows:
+        raise ValueError(f"NSE returned no EOD history for {symbol}")
+    return rows
+
+
+def _nse_eod_history(symbol: str, days: int) -> list[dict[str, Any]]:
+    return _cached(f"nse-eod:{symbol}:{days}", 6 * 60 * 60, lambda: _nse_eod_rows(symbol, days))
 
 
 def _quote_is_nse(quote: dict[str, Any]) -> bool:
@@ -269,28 +331,9 @@ def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals:
     yahoo_symbol = f"{normalized_symbol}.{ 'NS' if exchange.upper() == 'NSE' else 'BO' }"
 
     def load():
-        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "2y", "interval": "1d", "events": "div,splits"}, 12)
-        chart = (result.get("chart") or {}).get("result") or []
-        if not chart:
-            raise ValueError("Yahoo returned no chart data")
-        item = chart[0]
-        meta = item.get("meta", {})
-        timestamps = item.get("timestamp") or []
-        quote = (item.get("indicators") or {}).get("quote", [{}])[0]
-        rows = []
-        for index, stamp in enumerate(timestamps):
-            close = _finite((quote.get("close") or [])[index] if index < len(quote.get("close", [])) else None)
-            if close is None:
-                continue
-            # Sparse Yahoo candles occasionally omit an intraday field. Keep
-            # the daily series chart-safe rather than failing the whole chart.
-            open_price = _finite((quote.get("open") or [])[index] if index < len(quote.get("open", [])) else None) or close
-            high = _finite((quote.get("high") or [])[index] if index < len(quote.get("high", [])) else None) or max(open_price, close)
-            low = _finite((quote.get("low") or [])[index] if index < len(quote.get("low", [])) else None) or min(open_price, close)
-            rows.append({"time": datetime.fromtimestamp(stamp, timezone.utc).date().isoformat(),
-                         "open": open_price, "high": max(high, open_price, close),
-                         "low": min(low, open_price, close), "close": close,
-                         "volume": _finite((quote.get("volume") or [])[index]) or 0})
+        if exchange.upper() != "NSE":
+            raise ValueError("NSE EOD history is available only for NSE holdings")
+        rows = _nse_eod_history(normalized_symbol, 730)
         closes = [row["close"] for row in rows]
         volumes = [row["volume"] for row in rows]
         sma20 = _sma(closes, 20)
@@ -317,11 +360,11 @@ def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals:
                 row["bollinger_upper"] = row["bollinger_lower"] = row["bollinger_bandwidth_pct"] = None
             vol_window = volumes[max(0, index - 19): index + 1]
             row["avg_volume_20d"] = sum(vol_window) / len(vol_window) if vol_window else row["volume"]
-        price = _finite(meta.get("regularMarketPrice")) or (rows[-1]["close"] if rows else None)
-        previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
+        price = rows[-1]["close"] if rows else None
+        previous = rows[-2]["close"] if len(rows) > 1 else None
         latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
         crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
-        return {"symbol": normalized_symbol, "exchange": exchange.upper(), "name": meta.get("longName") or normalized_symbol,
+        return {"symbol": normalized_symbol, "exchange": exchange.upper(), "name": normalized_symbol,
                 "price": price, "previous_close": previous,
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
                 "volume": rows[-1]["volume"] if rows else None, "currency": meta.get("currency", "INR"),
@@ -330,9 +373,9 @@ def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals:
                                "ema12": _latest(ema12), "ema26": _latest(ema26),
                                "rsi14": _latest(rsi), "macd": _latest(macd), "macd_signal": _latest(macd_signal),
                                "macd_histogram": _latest(macd_histogram), "sma_crossover": crossover},
-                "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
+                "source": "NSE India EOD", "as_of": datetime.now(timezone.utc).isoformat()}
 
-    snapshot = _cached(f"snapshot:{yahoo_symbol}", 60, load)
+    snapshot = _cached(f"snapshot:{normalized_symbol}:NSE", 6 * 60 * 60, load)
     # History views do not use valuation data. Avoid quoteSummary there: Yahoo
     # frequently rejects that endpoint without browser session cookies and the
     # extra request unnecessarily consumes the public API rate budget.
@@ -373,35 +416,42 @@ def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals:
 
 
 def market_quote(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
-    """Return the latest quote and compact technical-indicator summary."""
+    """Return Yahoo's current quote plus NSE EOD-derived indicators."""
     normalized_symbol = _normalize_symbol(symbol)
     normalized_exchange = exchange.upper()
     yahoo_symbol = f"{normalized_symbol}.{ 'NS' if normalized_exchange == 'NSE' else 'BO' }"
 
     def load():
-        # One year is enough for the 200-day SMA, while remaining much smaller
-        # than the two-year chart downloaded only when a user opens it.
-        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "1y", "interval": "1d"}, 8)
+        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "5d", "interval": "1d"}, 6)
         chart = (result.get("chart") or {}).get("result") or []
         if not chart:
             raise ValueError("Yahoo returned no quote data")
         item = chart[0]
         meta = item.get("meta", {})
-        closes = [value for close in ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or []) if (value := _finite(close)) is not None]
-        price = _finite(meta.get("regularMarketPrice")) or _latest(closes)
+        yahoo_closes = [value for close in ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or []) if (value := _finite(close)) is not None]
+        price = _finite(meta.get("regularMarketPrice")) or _latest(yahoo_closes)
         previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
-        sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
-        macd, macd_signal, macd_histogram = _macd(closes)
-        latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
-        crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
+        try:
+            rows = _nse_eod_history(normalized_symbol, 365) if normalized_exchange == "NSE" else []
+            closes = [row["close"] for row in rows]
+            sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
+            macd, macd_signal, macd_histogram = _macd(closes)
+            latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
+            crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
+            indicators = {"rsi14": _latest(_rsi(closes)), "sma50": latest_sma50,
+                          "sma200": latest_sma200, "macd": _latest(macd),
+                          "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram),
+                          "sma_crossover": crossover, "source": "NSE India EOD"}
+        except Exception:
+            # A temporary archive outage must not hide a current Yahoo quote.
+            indicators = {"rsi14": None, "sma50": None, "sma200": None, "macd": None,
+                          "macd_signal": None, "macd_histogram": None, "sma_crossover": "neutral",
+                          "source": "NSE India EOD unavailable"}
         return {"symbol": normalized_symbol, "exchange": normalized_exchange, "price": price,
                 "previous_close": previous,
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
                 "currency": meta.get("currency", "INR"), "source": "Yahoo Finance (delayed)",
-                "indicators": {"rsi14": _latest(_rsi(closes)), "sma50": latest_sma50,
-                               "sma200": latest_sma200, "macd": _latest(macd),
-                               "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram),
-                               "sma_crossover": crossover},
+                "indicators": indicators,
                 "as_of": datetime.now(timezone.utc).isoformat()}
 
     return _cached(f"quote:{yahoo_symbol}", 60, load)
