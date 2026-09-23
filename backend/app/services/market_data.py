@@ -373,25 +373,35 @@ def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals:
 
 
 def market_quote(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
-    """Return the latest quote without loading a full chart series."""
+    """Return the latest quote and compact technical-indicator summary."""
     normalized_symbol = _normalize_symbol(symbol)
     normalized_exchange = exchange.upper()
     yahoo_symbol = f"{normalized_symbol}.{ 'NS' if normalized_exchange == 'NSE' else 'BO' }"
 
     def load():
-        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "5d", "interval": "1d"}, 6)
+        # One year is enough for the 200-day SMA, while remaining much smaller
+        # than the two-year chart downloaded only when a user opens it.
+        result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "1y", "interval": "1d"}, 8)
         chart = (result.get("chart") or {}).get("result") or []
         if not chart:
             raise ValueError("Yahoo returned no quote data")
         item = chart[0]
         meta = item.get("meta", {})
-        closes = ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or [])
-        price = _finite(meta.get("regularMarketPrice")) or _latest([_finite(close) for close in closes])
+        closes = [value for close in ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or []) if (value := _finite(close)) is not None]
+        price = _finite(meta.get("regularMarketPrice")) or _latest(closes)
         previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
+        sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
+        macd, macd_signal, macd_histogram = _macd(closes)
+        latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
+        crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
         return {"symbol": normalized_symbol, "exchange": normalized_exchange, "price": price,
                 "previous_close": previous,
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
                 "currency": meta.get("currency", "INR"), "source": "Yahoo Finance (delayed)",
+                "indicators": {"rsi14": _latest(_rsi(closes)), "sma50": latest_sma50,
+                               "sma200": latest_sma200, "macd": _latest(macd),
+                               "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram),
+                               "sma_crossover": crossover},
                 "as_of": datetime.now(timezone.utc).isoformat()}
 
-    return _cached(f"quote:{yahoo_symbol}", 30, load)
+    return _cached(f"quote:{yahoo_symbol}", 60, load)
