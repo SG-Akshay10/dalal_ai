@@ -82,7 +82,6 @@ export default function DashboardPage() {
     if (portfolioResponse.ok) {
       const result = await portfolioResponse.json();
       setAnalysis(result);
-      await Promise.all(loadedHoldings.map(async (holding) => [holding.id, await loadHistory(holding, auth)] as const));
       window.sessionStorage.setItem("portfolio-analysis", JSON.stringify(result));
     }
   }

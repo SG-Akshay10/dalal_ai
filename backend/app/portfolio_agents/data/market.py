@@ -120,7 +120,7 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     else:
         source = "Yahoo Finance (delayed)"
         try:
-            snapshot = market_snapshot(ticker, holding.exchange)
+            snapshot = market_snapshot(ticker, holding.exchange, include_fundamentals=True)
             price, history, indicators, as_of = snapshot.get("price") or price, snapshot.get("history", []), snapshot.get("indicators", {}), snapshot.get("as_of")
             pe_ratio, de_ratio = _finite(snapshot.get("pe_ratio")), _finite(snapshot.get("de_ratio"))
             forward_pe = _finite(snapshot.get("forward_pe"))
@@ -161,4 +161,3 @@ def enrich_holding(holding: HoldingInput) -> EnrichedHolding:
     )
     global_data_cache.set(cache_key, result)
     return result
-
