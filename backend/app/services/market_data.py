@@ -263,8 +263,8 @@ def _latest(values: list[Optional[float]]) -> Optional[float]:
     return next((value for value in reversed(values) if value is not None), None)
 
 
-def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
-    """Return quote, fundamentals, and two years of daily chart data."""
+def market_snapshot(symbol: str, exchange: str = "NSE", *, include_fundamentals: bool = False) -> dict[str, Any]:
+    """Return two years of daily chart data and, when requested, fundamentals."""
     normalized_symbol = _normalize_symbol(symbol)
     yahoo_symbol = f"{normalized_symbol}.{ 'NS' if exchange.upper() == 'NSE' else 'BO' }"
 
@@ -333,6 +333,12 @@ def market_snapshot(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
                 "source": "Yahoo Finance (delayed)", "as_of": datetime.now(timezone.utc).isoformat()}
 
     snapshot = _cached(f"snapshot:{yahoo_symbol}", 60, load)
+    # History views do not use valuation data. Avoid quoteSummary there: Yahoo
+    # frequently rejects that endpoint without browser session cookies and the
+    # extra request unnecessarily consumes the public API rate budget.
+    if not include_fundamentals:
+        return snapshot
+
     # quoteSummary provides valuation and balance sheet parameters; absence should not fail snapshot.
     try:
         summary = _get(f"/v10/finance/quoteSummary/{yahoo_symbol}", {"modules": "summaryDetail,defaultKeyStatistics,financialData"})
