@@ -25,6 +25,15 @@ except ImportError:  # pragma: no cover - depends on deployment environment
 YAHOO_HEADERS = {"User-Agent": "dalal.ai/1.0"}
 _cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = threading.Lock()
+_cache_key_locks: dict[str, threading.Lock] = {}
+_yahoo_request_lock = threading.Lock()
+_yahoo_next_request_at = 0.0
+
+# Yahoo's public endpoints are best-effort and will throttle bursts from one
+# deployment IP.  Keep requests deliberately modest; callers are already
+# backed by the short-lived cache below.
+YAHOO_MIN_REQUEST_INTERVAL_SECONDS = 0.35
+YAHOO_MAX_RETRIES = 2
 
 # This is intentionally a small, high-confidence seed. Yahoo search fills in
 # the long tail of NSE listings and lets aliases stay maintainable as names
@@ -62,17 +71,50 @@ def _cached(key: str, ttl: int, loader):
         item = _cache.get(key)
         if item and item[0] > now:
             return item[1]
-    value = loader()
-    with _cache_lock:
-        _cache[key] = (now + ttl, value)
-    return value
+        key_lock = _cache_key_locks.setdefault(key, threading.Lock())
+
+    # Coalesce simultaneous cache misses (for example, duplicate holdings in
+    # a portfolio) into one Yahoo request.
+    with key_lock:
+        now = time.monotonic()
+        with _cache_lock:
+            item = _cache.get(key)
+            if item and item[0] > now:
+                return item[1]
+        value = loader()
+        with _cache_lock:
+            _cache[key] = (time.monotonic() + ttl, value)
+        return value
+
+
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    """Honor Yahoo's retry hint when supplied, with a bounded fallback."""
+    try:
+        retry_after = float(response.headers.get("Retry-After", ""))
+        if retry_after >= 0:
+            return min(retry_after, 10.0)
+    except (TypeError, ValueError):
+        pass
+    return min(0.75 * (2 ** attempt), 5.0)
 
 
 def _get(path: str, params: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
-    response = httpx.get("https://query1.finance.yahoo.com" + path, params=params,
-                         headers=YAHOO_HEADERS, timeout=timeout)
-    response.raise_for_status()
-    return response.json()
+    global _yahoo_next_request_at
+    url = "https://query1.finance.yahoo.com" + path
+    for attempt in range(YAHOO_MAX_RETRIES + 1):
+        # Serialize outbound calls briefly. This avoids turning the portfolio
+        # endpoint's worker pool into a burst against Yahoo's public API.
+        with _yahoo_request_lock:
+            wait = _yahoo_next_request_at - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            _yahoo_next_request_at = time.monotonic() + YAHOO_MIN_REQUEST_INTERVAL_SECONDS
+            response = httpx.get(url, params=params, headers=YAHOO_HEADERS, timeout=timeout)
+        if response.status_code != 429 or attempt == YAHOO_MAX_RETRIES:
+            response.raise_for_status()
+            return response.json()
+        time.sleep(_retry_delay(response, attempt))
+    raise RuntimeError("Yahoo request retry loop exited unexpectedly")  # pragma: no cover
 
 
 def _quote_is_nse(quote: dict[str, Any]) -> bool:
