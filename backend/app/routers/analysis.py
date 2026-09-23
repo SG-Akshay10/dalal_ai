@@ -228,7 +228,7 @@ def analyze_portfolio(user: dict = Depends(get_current_user)):
         position = {"holding": holding, "invested_amount": invested, "current_amount": None, "quote": None, "error": None, "sector": None}
         try:
             quote = market_quote(holding["symbol"], holding.get("exchange", "NSE"))
-            position["quote"] = {key: quote.get(key) for key in ("price", "previous_close", "day_change_pct", "source", "as_of", "currency")}
+            position["quote"] = {key: quote.get(key) for key in ("price", "previous_close", "day_change_pct", "source", "as_of", "currency", "indicators")}
             if quote.get("price") is not None:
                 position["current_amount"] = quantity * float(quote["price"])
         except Exception as exc:
