@@ -179,6 +179,16 @@ def _nse_eod_history(symbol: str, days: int) -> list[dict[str, Any]]:
     return _cached(f"nse-eod:{symbol}:{days}", 6 * 60 * 60, lambda: _nse_eod_rows(symbol, days))
 
 
+def _yahoo_daily_closes(yahoo_symbol: str) -> list[float]:
+    """Fallback only when NSE's public EOD archive is temporarily unavailable."""
+    result = _get(f"/v8/finance/chart/{yahoo_symbol}", {"range": "1y", "interval": "1d"}, 8)
+    chart = (result.get("chart") or {}).get("result") or []
+    if not chart:
+        raise ValueError("Yahoo returned no fallback indicator history")
+    quote = (chart[0].get("indicators") or {}).get("quote", [{}])[0]
+    return [value for close in (quote.get("close") or []) if (value := _finite(close)) is not None]
+
+
 def _quote_is_nse(quote: dict[str, Any]) -> bool:
     return (quote.get("exchange") in {"NSI", "NSE"} or str(quote.get("symbol", "")).endswith(".NS"))
 
@@ -431,22 +441,24 @@ def market_quote(symbol: str, exchange: str = "NSE") -> dict[str, Any]:
         yahoo_closes = [value for close in ((item.get("indicators") or {}).get("quote", [{}])[0].get("close") or []) if (value := _finite(close)) is not None]
         price = _finite(meta.get("regularMarketPrice")) or _latest(yahoo_closes)
         previous = _finite(meta.get("previousClose")) or _finite(meta.get("chartPreviousClose"))
+        indicator_source = "NSE India EOD"
         try:
             rows = _nse_eod_history(normalized_symbol, 365) if normalized_exchange == "NSE" else []
             closes = [row["close"] for row in rows]
-            sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
-            macd, macd_signal, macd_histogram = _macd(closes)
-            latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
-            crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
-            indicators = {"rsi14": _latest(_rsi(closes)), "sma50": latest_sma50,
-                          "sma200": latest_sma200, "macd": _latest(macd),
-                          "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram),
-                          "sma_crossover": crossover, "source": "NSE India EOD"}
         except Exception:
-            # A temporary archive outage must not hide a current Yahoo quote.
-            indicators = {"rsi14": None, "sma50": None, "sma200": None, "macd": None,
-                          "macd_signal": None, "macd_histogram": None, "sma_crossover": "neutral",
-                          "source": "NSE India EOD unavailable"}
+            # NSE's public archive occasionally responds with a bot-protection
+            # page. Preserve the indicators with a rate-limited Yahoo fallback.
+            closes = _cached(f"yahoo-indicators:{yahoo_symbol}", 6 * 60 * 60,
+                             lambda: _yahoo_daily_closes(yahoo_symbol))
+            indicator_source = "Yahoo Finance fallback"
+        sma50, sma200 = _sma(closes, 50), _sma(closes, 200)
+        macd, macd_signal, macd_histogram = _macd(closes)
+        latest_sma50, latest_sma200 = _latest(sma50), _latest(sma200)
+        crossover = "neutral" if latest_sma50 is None or latest_sma200 is None else "bullish" if latest_sma50 > latest_sma200 else "bearish" if latest_sma50 < latest_sma200 else "neutral"
+        indicators = {"rsi14": _latest(_rsi(closes)), "sma50": latest_sma50,
+                      "sma200": latest_sma200, "macd": _latest(macd),
+                      "macd_signal": _latest(macd_signal), "macd_histogram": _latest(macd_histogram),
+                      "sma_crossover": crossover, "source": indicator_source}
         return {"symbol": normalized_symbol, "exchange": normalized_exchange, "price": price,
                 "previous_close": previous,
                 "day_change_pct": ((price - previous) / previous * 100) if price is not None and previous else None,
